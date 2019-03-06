@@ -84,7 +84,8 @@ function CombineUnloadAIDriver:driveOnField(dt)
 		end
 	else
 		self:stop()
-		print("found Chopper")
+	
+	
 	end	
 end
 

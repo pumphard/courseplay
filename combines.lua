@@ -68,11 +68,11 @@ function CombineManager:updateManagerStatus()
 		courseplay:updateFillLevelsAndCapacities(combine)
 		combineData.fillLevelPct = combine.cp.totalFillLevelPercent
 		combineData.isChopper = courseplay:isChopper(combine)
-		print(string.format("%s: is on Field %s; is a %s FillLevel:%s",tostring(combine.name),tostring(combineData.isOnField),tostring(combineData.isChopper and "chopper" or "combine"),tostring(combineData.fillLevelPct)))
+		print(string.format("%s: is on Field %s; is a %s; FillLevel:%s; assigned tractors: %s",tostring(combine.name),tostring(combineData.isOnField),tostring(combineData.isChopper and "chopper" or "combine"),tostring(combineData.fillLevelPct),tostring(#combineData.assignedTractors)))
 	end
 	for tractor,tractorData in pairs (self.allTractors)do
 		tractorData.isOnField = tractor.cp.searchCombineOnField > 0 and tractor.cp.searchCombineOnField or  self:vehicleIsOnWhichField(tractor) 
-		print(string.format("%s: is on Field %s",tostring(tractor.name),tostring(tractorData.isOnField)))
+		print(string.format("%s: is on Field %s; active combine: %s",tostring(tractor.name),tostring(tractorData.isOnField),tostring(tractorData.registeredCombine and tractorData.registeredCombine.name or "none")))
 	end
 	for combine,combineData in pairs(self.allCombines) do
 		if combineData.isChopper then
@@ -89,16 +89,15 @@ function CombineManager:manageAssignments()
 	for tractor,tractorData in pairs (self.allTractors)do
 		if tractorData.registeredCombine == nil then
 			--find the chopper with the less assigned tractors
-			local combineToChoose, minNumAssignedTractors = nil,math.max
+			local combineToChoose, minNumAssignedTractors = nil,math.huge
 			for index,combine in pairs(self.choppersOnField[tractorData.isOnField]) do
-				local numAssignedTractors = #self.allCombines[combine].assignedTractors --self:getNumAssignedTractors(combine) 
-				if minNumAssignedTractors > numAssignedTractors then
-					minNumAssignedTractors = numAssignedTractors
+				if minNumAssignedTractors > self:getNumAssignedTractors(combine) then
+					minNumAssignedTractors = self:getNumAssignedTractors(combine)
 					combineToChoose = combine
 				end
 			end
 			if combineToChoose then
-				tractorData.registeredCombine = combineToChoose
+				self:registerAtCombine(tractor,combineToChoose)				
 			end
 		end
 	end
@@ -122,8 +121,23 @@ function CombineManager:vehicleIsOnWhichField(vehicle)
 	return fieldNum
 end
 
+function CombineManager:registerAtCombine(tractor,combine)	 
+	table.insert(self.allCombines[combine].assignedTractors,tractor)
+	self.allTractors[tractor].registeredCombine = combine
+	
+	if combine.courseplayers == nil then combine.courseplayers = {} end;
+	table.insert(combine.courseplayers, tractor)
+	tractor.cp.activeCombine = combine	
+end
 
-
+function CombineManager:unregisterFromCombine(tractor, combine)
+	self.allTractors[tractor].registeredCombine = nil
+	for i=1,#self.allCombines[combine].assignedTractors do
+		if tractor == self.allCombines[combine].assignedTractors[i] then
+			table.remove(self.allCombines[combine].assignedTractors,i)
+		end	
+	end
+end
 
 function CombineManager:getNumAssignedTractors(combine)
 	return #self.allCombines[combine].assignedTractors
@@ -382,6 +396,9 @@ function courseplay:unregisterFromCombine(vehicle, combine)
 	if vehicle.cp.activeCombine == nil or combine == nil then
 		return true
 	end
+	
+	g_combineManager:unregisterFromCombine(vehicle, combine)
+	
 	courseplay:debug(string.format("%s: unregistering from combine id(%s)", nameNum(vehicle), tostring(combine.id)), 4)
 	vehicle.cp.calculatedCourseToCombine = false;
 	courseplay:removeFromCombinesIgnoreList(vehicle, combine)
@@ -409,6 +426,8 @@ function courseplay:unregisterFromCombine(vehicle, combine)
 			combine.cp.turnStage = 0
 		end
 	end
+	
+	
 	
 	return true
 end
