@@ -32,7 +32,8 @@ function CombineManager:giveMeACombineToUnload(tractor)
 	if not self.allTractors[tractor] then
 		self.allTractors[tractor] = {
 									isOnField = 0,
-									registeredCombine = nil
+									registeredCombine = nil,
+									reqFillLevelPct = 0
 									}
 		self:updateManagerStatus()
 	end
@@ -59,7 +60,6 @@ function CombineManager:real5secListener()
 	self:manageAssignments()
 end
 
-
 function CombineManager:updateManagerStatus()
 	self.combinesOnField = {}
 	self.choppersOnField = {}
@@ -69,12 +69,6 @@ function CombineManager:updateManagerStatus()
 		combineData.fillLevelPct = combine.cp.totalFillLevelPercent
 		combineData.isChopper = courseplay:isChopper(combine)
 		print(string.format("%s: is on Field %s; is a %s; FillLevel:%s; assigned tractors: %s",tostring(combine.name),tostring(combineData.isOnField),tostring(combineData.isChopper and "chopper" or "combine"),tostring(combineData.fillLevelPct),tostring(#combineData.assignedTractors)))
-	end
-	for tractor,tractorData in pairs (self.allTractors)do
-		tractorData.isOnField = tractor.cp.searchCombineOnField > 0 and tractor.cp.searchCombineOnField or  self:vehicleIsOnWhichField(tractor) 
-		print(string.format("%s: is on Field %s; active combine: %s",tostring(tractor.name),tostring(tractorData.isOnField),tostring(tractorData.registeredCombine and tractorData.registeredCombine.name or "none")))
-	end
-	for combine,combineData in pairs(self.allCombines) do
 		if combineData.isChopper then
 			if self.choppersOnField[combineData.isOnField] == nil then  self.choppersOnField[combineData.isOnField] = {} end
 			table.insert(self.choppersOnField[combineData.isOnField],combine)
@@ -82,26 +76,41 @@ function CombineManager:updateManagerStatus()
 			if self.combinesOnField[combineData.isOnField] == nil then  self.combinesOnField[combineData.isOnField] = {} end
 			table.insert(self.combinesOnField[combineData.isOnField],combine)
 		end
-	end	
+	end
+	for tractor,tractorData in pairs (self.allTractors)do
+		tractorData.isOnField = tractor.cp.searchCombineOnField > 0 and tractor.cp.searchCombineOnField or  self:vehicleIsOnWhichField(tractor) 
+		tractorData.reqFillLevelPct = tractor.cp.driveOnAtFillLevel
+		print(string.format("%s: is on Field %s; active combine: %s",tostring(tractor.name),tostring(tractorData.isOnField),tostring(tractorData.registeredCombine and tractorData.registeredCombine.name or "none")))
+	end
 end
 
 function CombineManager:manageAssignments()
 	for tractor,tractorData in pairs (self.allTractors)do
 		if tractorData.registeredCombine == nil then
-			--find the chopper with the less assigned tractors
-			local combineToChoose, minNumAssignedTractors = nil,math.huge
-			for index,combine in pairs(self.choppersOnField[tractorData.isOnField]) do
-				if minNumAssignedTractors > self:getNumAssignedTractors(combine) then
-					minNumAssignedTractors = self:getNumAssignedTractors(combine)
-					combineToChoose = combine
-				end
+			local chopper = self:findChopperToAssign(tractorData)
+			if chopper then
+				self:registerAtCombine(tractor,chopper)
+				return
 			end
-			if combineToChoose then
-				self:registerAtCombine(tractor,combineToChoose)				
-			end
+			
+			
+			
+			
 		end
 	end
 
+end
+
+function CombineManager:findChopperToAssign(tractorData)	
+	--find the chopper with the less assigned tractors
+	local combineToChoose, minNumAssignedTractors = nil,math.huge
+	for index,combine in pairs(self.choppersOnField[tractorData.isOnField]) do
+		if minNumAssignedTractors > self:getNumAssignedTractors(combine) then
+			minNumAssignedTractors = self:getNumAssignedTractors(combine)
+			combineToChoose = combine
+		end
+	end
+	return combineToChoose
 end
 
 function CombineManager:vehicleIsOnWhichField(vehicle)
