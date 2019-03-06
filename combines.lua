@@ -1,5 +1,142 @@
+
+---@class CombineManager
+CombineManager = CpObject()
+function  CombineManager:init()
+	self.allCombines = {}
+	self.allTractors = {}
+	self.combinesOnField = {}
+	self.choppersOnField = {}
+end
+g_combineManager = CombineManager()
+
+function CombineManager:addToCombines(combineToAdd)
+	if combineToAdd.ownerFarmId ~= nil then
+		self.allCombines[combineToAdd] = {
+						isOnField = 0,
+						fillLevelPct = 0,
+						isChopper = false,
+						assignedTractors = {}
+						}
+		self:updateManagerStatus()
+	end
+	
+end
+
+function CombineManager:deleteCombine(combineToDelete)
+	-- Make sure, the we unregister the combine before deleting
+	--	courseplay:unregisterFromCombine(courseplayer, combineToDelete)
+	self.allCombines[combineToDelete] = nil ;
+end
+
+function CombineManager:giveMeACombineToUnload(tractor)
+	if not self.allTractors[tractor] then
+		self.allTractors[tractor] = {
+									isOnField = 0,
+									registeredCombine = nil
+									}
+		self:updateManagerStatus()
+	end
+	
+	return self.allTractors[tractor].registeredCombine
+end
+
+function CombineManager:removeMeFromManagersList(tractorToDelete)
+	-- Make sure, the we unregister the combine before deleting
+	--	courseplay:unregisterFromCombine(courseplayer, combineToDelete)
+	self.allTractors[tractorToDelete] = nil ;
+end
+
+function CombineManager:getNumOfCombines()
+	local count = 0
+	for _,_ in pairs (self.allCombines)do
+		count=count+1;
+	end
+	return count;	
+end
+
+function CombineManager:real5secListener()
+	self:updateManagerStatus()
+	self:manageAssignments()
+end
+
+
+function CombineManager:updateManagerStatus()
+	self.combinesOnField = {}
+	self.choppersOnField = {}
+	for combine,combineData in pairs (self.allCombines)do
+		combineData.isOnField = self:vehicleIsOnWhichField(combine)
+		courseplay:updateFillLevelsAndCapacities(combine)
+		combineData.fillLevelPct = combine.cp.totalFillLevelPercent
+		combineData.isChopper = courseplay:isChopper(combine)
+		print(string.format("%s: is on Field %s; is a %s FillLevel:%s",tostring(combine.name),tostring(combineData.isOnField),tostring(combineData.isChopper and "chopper" or "combine"),tostring(combineData.fillLevelPct)))
+	end
+	for tractor,tractorData in pairs (self.allTractors)do
+		tractorData.isOnField = tractor.cp.searchCombineOnField > 0 and tractor.cp.searchCombineOnField or  self:vehicleIsOnWhichField(tractor) 
+		print(string.format("%s: is on Field %s",tostring(tractor.name),tostring(tractorData.isOnField)))
+	end
+	for combine,combineData in pairs(self.allCombines) do
+		if combineData.isChopper then
+			if self.choppersOnField[combineData.isOnField] == nil then  self.choppersOnField[combineData.isOnField] = {} end
+			table.insert(self.choppersOnField[combineData.isOnField],combine)
+		else
+			if self.combinesOnField[combineData.isOnField] == nil then  self.combinesOnField[combineData.isOnField] = {} end
+			table.insert(self.combinesOnField[combineData.isOnField],combine)
+		end
+	end	
+end
+
+function CombineManager:manageAssignments()
+	for tractor,tractorData in pairs (self.allTractors)do
+		if tractorData.registeredCombine == nil then
+			--find the chopper with the less assigned tractors
+			local combineToChoose, minNumAssignedTractors = nil,math.max
+			for index,combine in pairs(self.choppersOnField[tractorData.isOnField]) do
+				local numAssignedTractors = #self.allCombines[combine].assignedTractors --self:getNumAssignedTractors(combine) 
+				if minNumAssignedTractors > numAssignedTractors then
+					minNumAssignedTractors = numAssignedTractors
+					combineToChoose = combine
+				end
+			end
+			if combineToChoose then
+				tractorData.registeredCombine = combineToChoose
+			end
+		end
+	end
+
+end
+
+function CombineManager:vehicleIsOnWhichField(vehicle)
+	local fieldNum = 0
+	if courseplay.fields.numAvailableFields > 0 then
+		for fieldNumber,fieldData in pairs (courseplay.fields.fieldData) do 
+			local combineX,_,combineZ = getWorldTranslation(vehicle.cp.DirectionNode or vehicle.rootNode);
+			if combineX >= fieldData.dimensions.minX and combineX <= fieldData.dimensions.maxX and combineZ >= fieldData.dimensions.minZ and combineZ <= fieldData.dimensions.maxZ then
+				local _, pointInPoly, _, _ = courseplay.fields:getPolygonData(fieldData.points, combineX, combineZ, true, true, true);
+				if pointInPoly then
+					fieldNum = fieldNumber
+					break;
+				end
+			end		
+		end
+	end
+	return fieldNum
+end
+
+
+
+
+function CombineManager:getNumAssignedTractors(combine)
+	return #self.allCombines[combine].assignedTractors
+end
+
+
+
+
+
+------------------------------
 local curFile = 'combines.lua';
 local _;
+-- old code to be removed later
 function courseplay:getAllCombines()
 	local combines = {}
 	for _, vehicle in pairs(courseplay.combines) do

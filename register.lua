@@ -97,15 +97,10 @@ function courseplay.vehiclePostLoadFinished(self, superFunc, ...)
 	self.setCpVar = courseplay.setCpVar;
 
 	courseplay:setNameVariable(self);
-
-	-- combines table
-	if courseplay.combines == nil then
-		courseplay.combines = {};
-	end;
+	
 	if self.cp.isCombine or self.cp.isChopper or self.cp.isHarvesterSteerable or self.cp.isSugarBeetLoader or courseplay:isAttachedCombine(self) then
-		courseplay.combines[self.rootNode] = self;
-	end;
-
+		g_combineManager:addToCombines(self)
+	end
 	return loadingState;
 end;
 Vehicle.loadFinished = Utils.overwrittenFunction(Vehicle.loadFinished, courseplay.vehiclePostLoadFinished);
@@ -138,19 +133,8 @@ function courseplay:vehicleDelete()
 			self.cp.notesToDelete = nil;
 		end;
 
-		if courseplay.combines[self.rootNode] then
-			for _, courseplayer in pairs(g_currentMission.enterables) do
-				if courseplayer.cp then
-					if courseplayer.cp.activeCombine and courseplayer.cp.activeCombine == self then
-						courseplay:unregisterFromCombine(courseplayer, self)
-					end
-					if courseplayer.cp.lastActiveCombine and courseplayer.cp.lastActiveCombine == self then
-						courseplayer.cp.lastActiveCombine = nil
-					end
-				end
-			end
-			courseplay.combines[self.rootNode] = nil;
-		end;
+		g_combineManager:deleteCombine(self)
+			
 	end;
 end;
 Vehicle.delete = Utils.prependedFunction(Vehicle.delete, courseplay.vehicleDelete);

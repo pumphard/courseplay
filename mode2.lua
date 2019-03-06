@@ -1112,7 +1112,8 @@ function courseplay:unload_combine(vehicle, dt)
 					courseplay:setModeState(vehicle, STATE_DEFAULT);
 					courseplay:setWaypointIndex(vehicle, 2);
 					courseplay:startAlignmentCourse( vehicle, vehicle.Waypoints[ 1 ])
-
+					vehicle.cp.driver:onTurnStart()
+					
 				elseif vehicle.cp.mode2nextState == STATE_WAIT_AT_START then
 					-- refSpeed = vehicle.cp.speeds.turn
 					courseplay:switchToNextMode2State(vehicle);

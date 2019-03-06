@@ -285,6 +285,7 @@ function CpManager:update(dt)
 		self.realTime5SecsTimer = self.realTime5SecsTimer + dt;
 		self.realTime5SecsTimerThrough = false;
 	else
+		g_combineManager:real5secListener()
 		self.realTime5SecsTimer = self.realTime5SecsTimer - 5000;
 		self.realTime5SecsTimerThrough = true;
 	end;
