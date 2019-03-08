@@ -47,14 +47,6 @@ function CombineManager:removeMeFromManagersList(tractorToDelete)
 	self.allTractors[tractorToDelete] = nil ;
 end
 
-function CombineManager:getNumOfCombines()
-	local count = 0
-	for _,_ in pairs (self.allCombines)do
-		count=count+1;
-	end
-	return count;	
-end
-
 function CombineManager:real5secListener()
 	self:updateManagerStatus()
 	self:manageAssignments()
@@ -75,8 +67,12 @@ function CombineManager:updateManagerStatus()
 		else
 			if self.combinesOnField[combineData.isOnField] == nil then  self.combinesOnField[combineData.isOnField] = {} end
 			table.insert(self.combinesOnField[combineData.isOnField],combine)
+			table.sort( self.combinesOnField[combineData.isOnField], function( a, b ) return a.cp.totalFillLevelPercent > b.cp.totalFillLevelPercent end )
 		end
 	end
+	
+	
+	
 	for tractor,tractorData in pairs (self.allTractors)do
 		tractorData.isOnField = tractor.cp.searchCombineOnField > 0 and tractor.cp.searchCombineOnField or  self:vehicleIsOnWhichField(tractor) 
 		tractorData.reqFillLevelPct = tractor.cp.driveOnAtFillLevel
@@ -92,22 +88,22 @@ function CombineManager:manageAssignments()
 				self:registerAtCombine(tractor,chopper)
 				return
 			end
-			
-			
-			
-			
 		end
-	end
+	end		
+end
 
+function CombineManager:findCombineToAssign()
+
+	return tractor
 end
 
 function CombineManager:findChopperToAssign(tractorData)	
 	--find the chopper with the less assigned tractors
 	local combineToChoose, minNumAssignedTractors = nil,math.huge
-	for index,combine in pairs(self.choppersOnField[tractorData.isOnField]) do
-		if minNumAssignedTractors > self:getNumAssignedTractors(combine) then
-			minNumAssignedTractors = self:getNumAssignedTractors(combine)
-			combineToChoose = combine
+	for index,chopper in pairs(self.choppersOnField[tractorData.isOnField]) do
+		if minNumAssignedTractors > self:getNumAssignedTractors(chopper) then
+			minNumAssignedTractors = self:getNumAssignedTractors(chopper)
+			combineToChoose = chopper
 		end
 	end
 	return combineToChoose

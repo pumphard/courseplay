@@ -25,7 +25,7 @@ CombineUnloadAIDriver.myStates = {
 	LOOKING_FOR_COMBINE = {},
 	FIND_THE_WAY_TO_COMBINE = {},
 	DRIVE_WAY_ON_FIELD = {},
-	DRIVE_BESIDE_COMBINE = {},
+	FOLLOW_PIPE = {},
 	FIND_THE_WAY_TO_UNLOADCOURSE = {}
 }
 
@@ -82,16 +82,19 @@ function CombineUnloadAIDriver:driveOnField(dt)
 		if self.combineToUnload ~= nil then
 			self:switchFieldState(self.states.FIND_THE_WAY_TO_COMBINE)
 		end
-	else
-		self:stop()
-	
-	
+	elseif self.fieldState == self.states.FIND_THE_WAY_TO_COMBINE then
+		self:switchFieldState(self.states.DRIVE_WAY_ON_FIELD)
+	elseif self.fieldState == self.states.DRIVE_WAY_ON_FIELD then
+		self:switchFieldState(self.states.FOLLOW_PIPE)
+	elseif self.fieldState == self.states.FOLLOW_PIPE then
+		self:followPipe()	
 	end	
 end
 
-function AIDriver:dismiss()
-	
-	AIDriver.dismiss(self)
+function CombineUnloadAIDriver:followPipe()
+
+	local X, Z =  self:getTargetUnloadingCoords(self.vehicle, self.combineToUnload, vehicle.cp.tipperOffset)
+
 end
 
 function CombineUnloadAIDriver:stop()
