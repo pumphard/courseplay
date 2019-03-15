@@ -21,6 +21,7 @@ GrainTransportAIDriver = CpObject(AIDriver)
 
 --- Constructor
 function GrainTransportAIDriver:init(vehicle)
+	courseplay.debugVehicle(11,vehicle,'GrainTransportAIDriver:init()')
 	AIDriver.init(self, vehicle)
 	self.mode = courseplay.MODE_GRAIN_TRANSPORT
 	self.runCounter = 0
@@ -68,8 +69,7 @@ function GrainTransportAIDriver:drive(dt)
 		and self.vehicle.cp.tipRefOffset ~= nil
 		and self.vehicle.cp.workToolAttached then
 
-		local lx, lz = self:getDirectionToGoalPoint()
-		self:searchForTipTriggers(lx, lz)
+		self:searchForTipTriggers()
 
 		allowedToDrive = self:load(allowedToDrive)
 		allowedToDrive, giveUpControl = self:onUnLoadCourse(allowedToDrive, dt)
@@ -111,6 +111,7 @@ function GrainTransportAIDriver:onWaypointChange(newIx)
 	
 end
 
+-- TODO: move this into onWaypointPassed() instead
 function GrainTransportAIDriver:checkLastWaypoint()
 	local allowedToDrive = true
 	if self.ppc:reachedLastWaypoint() then

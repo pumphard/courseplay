@@ -32,6 +32,7 @@ FillableFieldworkAIDriver.myStates = {
 	REFILL_DONE = {}
 }
 function FillableFieldworkAIDriver:init(vehicle)
+	courseplay.debugVehicle(11,vehicle,'CombineUnloadAIDriver:init()')
 	FieldworkAIDriver.init(self, vehicle)
 	self:initStates(FillableFieldworkAIDriver.myStates)
 	self.mode = courseplay.MODE_SEED_FERTILIZE
@@ -51,7 +52,7 @@ end
 
 --- Drive the refill part of the course
 function FillableFieldworkAIDriver:driveUnloadOrRefill()
-	local isNearWaitPoint, waitPointIx = self.course:hasWaitPointAround(self.ppc:getCurrentWaypointIx(), 10, 3)
+	local isNearWaitPoint, waitPointIx = self.course:hasWaitPointWithinDistance(self.ppc:getCurrentWaypointIx(), 5)
 
 	self:searchForRefillTriggers()
 	if self.temporaryCourse then

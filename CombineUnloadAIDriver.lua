@@ -31,6 +31,7 @@ CombineUnloadAIDriver.myStates = {
 
 --- Constructor
 function CombineUnloadAIDriver:init(vehicle)
+	courseplay.debugVehicle(11,vehicle,'CombineUnloadAIDriver:init()')
 	AIDriver.init(self, vehicle)
 	self:initStates(CombineUnloadAIDriver.myStates)
 	self.mode = courseplay.MODE_COMBI

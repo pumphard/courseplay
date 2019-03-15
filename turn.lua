@@ -159,6 +159,7 @@ function courseplay:turn(vehicle, dt)
 			local turnInfo = {};
 			turnInfo.directionNode					= realDirectionNode
 			turnInfo.frontMarker					= frontMarker;
+			turnInfo.backMarker						= backMarker;
 			turnInfo.halfVehicleWidth 				= 2.5;
 			turnInfo.directionNodeToTurnNodeLength  = directionNodeToTurnNodeLength + 0.5; -- 0.5 is to make the start turn point just a tiny in front of the tractor
 			turnInfo.wpChangeDistance				= wpChangeDistance;
@@ -1120,7 +1121,11 @@ function courseplay:generateTurnTypeQuestionmarkTurn(vehicle, turnInfo)
 
 	--- Front marker is in front of tractor
 	local extraMoveBack = 0
-	if turnInfo.frontMarker > 0 then
+	-- This works fine as long as there's no implement with a work area in the back as well. We don't really handle that
+	-- case properly. In stage 0 we check for the backmarker to change to stage 1 so we'll be further ahead than with
+	-- a front implement only. So no need to move the circle back, actually it should be moved forward but I don't have
+	-- the motivation to change that, for now, just don't move back, this works most of the time.
+	if turnInfo.frontMarker > 0 and turnInfo.backMarker > 0 then
 		extraMoveBack = turnInfo.frontMarker;
 	end;
 	courseplay:debug(("%s:(Turn) targetOffsetZ=%s, extraMoveBack=%.2fm"):format(nameNum(vehicle), tostring(targetOffsetZ), extraMoveBack), 14);
@@ -2150,14 +2155,14 @@ Then we add waypoints on a circle from T1 to WP.
 see https://ggbm.at/RN3cawGc
 --]]
 
-function courseplay:getAlignWpsToTargetWaypoint( vehicle, tx, tz, tDirection, generateStraightWaypoints )
+function courseplay:getAlignWpsToTargetWaypoint( vehicle, vx, vz, tx, tz, tDirection, generateStraightWaypoints )
 	vehicle.cp.turnTargets = {}
 	-- make the radius a bit bigger to make sure we can make the turn
 	local turnRadius = 1.2 * vehicle.cp.turnDiameter / 2
 	-- target waypoint we want to reach
 	local wpNode = courseplay.createNode( "wpNode", tx, tz, tDirection )
 	-- which side of the target node are we?
-	local vx, vy, vz = getWorldTranslation(vehicle.cp.DirectionNode or vehicle.rootNode);
+	local vy = getTerrainHeightAtWorldPos(g_currentMission.terrainRootNode, vx, 0, vz)
 	local dx, _, _ = worldToLocal( wpNode, vx, vy, vz )
 	-- right -1, left +1
 	local leftOrRight = dx < 0 and -1 or 1
@@ -2223,7 +2228,8 @@ function courseplay:startAlignmentCourse( vehicle, targetWaypoint, forceEnable )
 		targetWaypoint.cx, targetWaypoint.cz = courseplay:getVehicleOffsettedCoords(vehicle, targetWaypoint.cx, targetWaypoint.cz);
 	end;
 
-	local points = courseplay:getAlignWpsToTargetWaypoint( vehicle, targetWaypoint.cx, targetWaypoint.cz, math.rad( targetWaypoint.angle ))
+	local vx, _, vz = getWorldTranslation(vehicle.cp.DirectionNode or vehicle.rootNode)
+	local points = courseplay:getAlignWpsToTargetWaypoint( vehicle, vx, vz, targetWaypoint.cx, targetWaypoint.cz, math.rad( targetWaypoint.angle ))
 	if not points then
 		courseplay.debugVehicle( 14, vehicle, "(Align) can't find an alignment course, may be too close to target wp?" )
 		return
@@ -2257,14 +2263,14 @@ end
 -- End the alignment course, restore the original course and continue on it.
 function courseplay:endAlignmentCourse( vehicle )
 	if courseplay:onAlignmentCourse( vehicle ) then
-		courseplay:debugVehicle( 14, vehicle, "(Align) Ending alignment course, continue on original course at waypoint %d.", vehicle.cp.waypointIndex)
+		courseplay.debugVehicle( 14, vehicle, "(Align) Ending alignment course, continue on original course at waypoint %d.", vehicle.cp.waypointIndex)
 		vehicle.cp.alignment.onAlignmentCourse = false
 		-- that's for the waypoint change distance calculation in drive.lua, for the first waypoint it is 0.5 meters
 		-- but we won't be able to get that close every time which results in circling. So set this flag to make
 		-- drive.lua pick a bigger waypoint switch distance
 		vehicle.cp.alignment.justFinished = true
 	else
-		courseplay:debugVehicle( 14, "(Align) Ending alignment course but not on alignment course." )
+		courseplay.debugVehicle( 14, vehicle, "(Align) Ending alignment course but not on alignment course." )
 	end
 	courseplay:clearTurnTargets( vehicle )
 	vehicle.cp.isTurning = nil

@@ -813,6 +813,7 @@ function courseplay:load_tippers(vehicle, allowedToDrive)
 	end;
 
 	local unloadDistance = 1000;
+	local backUpDistance = 1000;
 	local trailerX,_,trailerZ = getWorldTranslation(currentTrailer.cp.realUnloadOrFillNode);
 
 	if not driveOn then
@@ -827,6 +828,10 @@ function courseplay:load_tippers(vehicle, allowedToDrive)
 				local triggerX,_,triggerZ = getWorldTranslation(currentTrailer.cp.currentSiloTrigger.rootNode);
 				_,_,unloadDistance = worldToLocal(directionNode, triggerX, vehicleY, triggerZ);
 				courseplay:debug(string.format('%s: Silo Trigger unloadDistance = %.2f vehicle.cp.trailerFillDistance = %.4s', nameNum(vehicle), unloadDistance, tostring(vehicle.cp.trailerFillDistance)), 2);
+				
+				--to be used when the waypoints are too close to get the realUnloadOrFillNode under the fillTrigger
+				--we are in fillTrigger anyway, so thats just optics
+				backUpDistance = vehicle.cp.driver.course:getDistanceBetweenVehicleAndWaypoint(vehicle, 1)
 			end;
 		elseif vehicle.cp.tipperLoadMode == 2 then
 			vehicle.cp.trailerFillDistance = 1;
@@ -836,11 +841,9 @@ function courseplay:load_tippers(vehicle, allowedToDrive)
 	if vehicle.cp.tipperLoadMode == 1 and currentTrailer.cp.currentSiloTrigger ~= nil and not driveOn then
         local acceptedFillType = false;
 		local siloTrigger = currentTrailer.cp.currentSiloTrigger;
-
 		if courseplay:fillTypesMatch(vehicle, siloTrigger, currentTrailer) then	
-
 			local siloIsEmpty = false --siloTrigger:getFillLevel(vehicle.cp.siloSelectedFillType) <= 1;
-			if not siloTrigger.isLoading and not siloIsEmpty and unloadDistance < vehicle.cp.trailerFillDistance then
+			if not siloTrigger.isLoading and not siloIsEmpty and (unloadDistance < vehicle.cp.trailerFillDistance or backUpDistance < 1 ) then
 				if siloTrigger:getIsActivatable(currentTrailer) then
 					courseplay:setFillOnTrigger(vehicle,currentTrailer,true,siloTrigger)
 				end 
@@ -891,7 +894,7 @@ function courseplay:load_tippers(vehicle, allowedToDrive)
 			end;
 		else
 			courseplay:debug(string.format('%s: Stop the tipper unloadDistance = %.4s vehicle.cp.trailerFillDistance = %.4s waypointindex = %s', nameNum(vehicle), tostring(unloadDistance), tostring(vehicle.cp.trailerFillDistance), tostring(vehicle.cp.waypointIndex)), 2);
-			if unloadDistance < vehicle.cp.trailerFillDistance or vehicle.cp.tipperLoadMode == 2 then
+			if unloadDistance < vehicle.cp.trailerFillDistance or vehicle.cp.tipperLoadMode == 2 or backUpDistance < 1 then
 				allowedToDrive = false;
 			end;
 		end;
@@ -1090,7 +1093,7 @@ function courseplay:unload_tippers(vehicle, allowedToDrive,dt)
 					if trailerInTipRange then
 						goForTipping = true
 					end
-
+					--[[
 					-- Get the animation
 					local animation;
 					if tipper.spec_animatedVehicle.animations['tipAnimationBack'] ~= nil then
@@ -1102,10 +1105,15 @@ function courseplay:unload_tippers(vehicle, allowedToDrive,dt)
 					else
 						animation = {["duration"] = 15000, ["currentTime"] = 0}								--Set some defaults, so in case a weird anim name was used, at least we are not throwing an error
 					end
+					]]
+					
 					local totalLength = abs(endDistance - startDistance)*0.9;
-					local fillDelta = vehicle.cp.totalFillLevel / vehicle.cp.totalCapacity;
-					local totalTipDuration = (animation.duration- animation.currentTime)/1*fillDelta / 1000;
+					--local fillDelta = vehicle.cp.totalFillLevel / vehicle.cp.totalCapacity;
+					
+					local dischargeNode = tipper:getCurrentDischargeNode()
+					local totalTipDuration = ((tipper.cp.totalFillLevel / dischargeNode.emptySpeed )/ 1000)
 					local meterPrSeconds = totalLength / totalTipDuration;
+					
 					if stopAndGo then
 						meterPrSeconds = vehicle.cp.speeds.reverse * 1000;
 					end;
@@ -1116,7 +1124,9 @@ function courseplay:unload_tippers(vehicle, allowedToDrive,dt)
 						local refSpeed = meterPrSeconds * 3.6; -- * 0.90;
 						vehicle.cp.backupUnloadSpeed = vehicle.cp.speeds.reverse;
 						courseplay:changeReverseSpeed(vehicle, nil, refSpeed, true);
-						courseplay:debug(string.format("%s: BGA totalLength=%.2f,  totalTipDuration%.2f,  refSpeed=%.2f", nameNum(tipper), totalLength, totalTipDuration, refSpeed), 2);
+						--courseplay:debug(string.format("%s: BGA totalLength=%.2f,  totalTipDuration%.2f,  refSpeed=%.2f", nameNum(tipper), totalLength, totalTipDuration, refSpeed), 2);
+						courseplay:debug(string.format("%s in mode %s: entering BGASilo: \nemptySpeed: %sl/sek; fillLevel: %0.1fl\nSilo length: %sm/Total unload time: %ss *3.6 = unload speed: %.2fkmh", tostring(tipper.getName and tipper:getName() or 'no name'), tostring(vehicle.cp.mode), tostring(dischargeNode.emptySpeed*1000),tipper.cp.totalFillLevel,tostring(totalLength) ,tostring(totalTipDuration),refSpeed),14)
+					--print(string.format("totalTipDuration: %s; totalLength: %s",tostring(totalTipDuration),tostring(totalLength)))
 						--print(string.format("%s: BGA totalLength=%.2f,  totalTipDuration%.2f,  refSpeed=%.2f", nameNum(vehicle), totalLength, totalTipDuration, refSpeed));
 					end;
 				end;
