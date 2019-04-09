@@ -63,11 +63,18 @@ function FieldworkAIDriver:init(vehicle)
 	self.turnDurationMs = 20000
 end
 
+function FieldworkAIDriver:setHudContent()
+	AIDriver.setHudContent(self)
+	courseplay.hud:setFieldWorkAIDriverContent(self.vehicle)
+end
+
 function FieldworkAIDriver.register()
 
 	AIImplement.getCanImplementBeUsedForAI = Utils.overwrittenFunction(AIImplement.getCanImplementBeUsedForAI,
 		function(self, superFunc)
 			if SpecializationUtil.hasSpecialization(BaleLoader, self.specializations) then
+				return true
+			elseif SpecializationUtil.hasSpecialization(BaleWrapper, self.specializations) then
 				return true
 			elseif SpecializationUtil.hasSpecialization(Pickup, self.specializations) then
 				return true
@@ -80,8 +87,9 @@ function FieldworkAIDriver.register()
 	AIVehicle.getCanStartAIVehicle = Utils.overwrittenFunction(AIVehicle.getCanStartAIVehicle,
 		function(self, superFunc)
 			-- Only the courseplay helper can handle bale loaders.
-			if FieldworkAIDriver.hasImplementWithSpecializationAttached(self, BaleLoader) or
-				FieldworkAIDriver.hasImplementWithSpecializationAttached(self, Pickup) then
+			if FieldworkAIDriver.hasImplementWithSpecialization(self, BaleLoader) or
+				FieldworkAIDriver.hasImplementWithSpecialization(self, BaleWrapper) or
+				FieldworkAIDriver.hasImplementWithSpecialization(self, Pickup) then
 				return false
 			end
 			if superFunc ~= nil then
@@ -114,11 +122,15 @@ function FieldworkAIDriver.register()
 	Pickup.registerEventListeners = Utils.appendedFunction(Pickup.registerEventListeners, PickupRegisterEventListeners)
 end
 
-function FieldworkAIDriver.hasImplementWithSpecializationAttached(vehicle, specialization)
+function FieldworkAIDriver.hasImplementWithSpecialization(vehicle, specialization)
+	return FieldworkAIDriver.getImplementWithSpecialization(vehicle, specialization) ~= nil
+end
+
+function FieldworkAIDriver.getImplementWithSpecialization(vehicle, specialization)
 	local aiImplements = vehicle:getAttachedAIImplements()
 	for _, implement in ipairs(aiImplements) do
 		if SpecializationUtil.hasSpecialization(specialization, implement.object.specializations) then
-			return true
+			return implement.object
 		end
 	end
 end
@@ -221,7 +233,6 @@ function FieldworkAIDriver:driveFieldwork()
 			self:calculateLoweringDuration()
 		else
 			self:debugSparse('waiting for all tools to lower')
-			self:startLoweringDurationTimer()
 			self:setSpeed(0)
 			self:checkFillLevels()
 		end
@@ -257,8 +268,8 @@ end
 
 ---@return boolean true if unload took over the driving
 function FieldworkAIDriver:driveUnloadOrRefill()
-	if self.temporaryCourse then
-		-- use the courseplay speed limit for fields
+	if self.course:isTemporary() then
+		-- use the courseplay speed limit until we get to the actual unload corse fields (on alignment/temporary)
 		self:setSpeed(self.vehicle.cp.speeds.field)
 	else
 		-- just drive normally
@@ -271,7 +282,7 @@ function FieldworkAIDriver:driveUnloadOrRefill()
 	return false
 end
 
---- Grain tank full during fieldwork
+--- Full during fieldwork
 function FieldworkAIDriver:changeToFieldworkUnloadOrRefill()
 	self.fieldworkState = self.states.UNLOAD_OR_REFILL_ON_FIELD
 	if self.stopImplementsWhileUnloadOrRefillOnField then
@@ -294,7 +305,7 @@ function FieldworkAIDriver:driveFieldworkUnloadOrRefill()
 		end
 	elseif self.fieldWorkUnloadOrRefillState == self.states.WAITING_FOR_UNLOAD_OR_REFILL then
 		if self:allFillLevelsOk() and not self.heldForUnloadRefill then
-			self:debug('unloaded/refilled, continue working')
+			self:debug('unloaded, continue working')
 			-- not full/empty anymore, maybe because Refilling to a trailer, go back to work
 			self:clearInfoText(self:getFillLevelInfoText())
 			self:changeToFieldwork()
@@ -308,6 +319,8 @@ function FieldworkAIDriver:changeToFieldwork()
 	self.state = self.states.ON_FIELDWORK_COURSE
 	self.fieldworkState = self.states.WAITING_FOR_LOWER
 	self:startWork()
+	self:setIsLoaded(false);
+	self:refreshHUD();
 end
 
 function FieldworkAIDriver:changeToUnloadOrRefill()
@@ -318,7 +331,7 @@ function FieldworkAIDriver:changeToUnloadOrRefill()
 	self.state = self.states.ON_UNLOAD_OR_REFILL_COURSE
 end
 
-function FieldworkAIDriver:onEndTemporaryCourse()
+function FieldworkAIDriver:onNextCourse()
 	if self.state == self.states.ON_FIELDWORK_COURSE then
 		self:changeToFieldwork()
 	end
@@ -423,9 +436,7 @@ function FieldworkAIDriver:startWork()
 	-- send the event first and _then_ lower otherwise it sometimes does not turn it on
 	self.vehicle:raiseAIEvent("onAIStart", "onAIImplementStart")
 	self.vehicle:requestActionEventUpdate() 
-	if not courseplay:getIsEngineReady(self.vehicle) then
-		self.vehicle:startMotor()
-	end
+	self:startEngineIfNeeded()
 	self:lowerImplements(self.vehicle)
 end
 
@@ -510,12 +521,12 @@ function FieldworkAIDriver:setUpCourses()
 		self:debug('Course with %d waypoints set up, there seems to be an unload/refill course starting at waypoint %d',
 			#self.vehicle.Waypoints, endFieldCourseIx + 1)
 		---@type Course
-		self.fieldworkCourse = Course(self.vehicle, self.vehicle.Waypoints, 1, endFieldCourseIx)
+		self.fieldworkCourse = Course(self.vehicle, self.vehicle.Waypoints, false, 1, endFieldCourseIx)
 		---@type Course
-		self.unloadRefillCourse = Course(self.vehicle, self.vehicle.Waypoints, endFieldCourseIx + 1, #self.vehicle.Waypoints)
+		self.unloadRefillCourse = Course(self.vehicle, self.vehicle.Waypoints, false, endFieldCourseIx + 1, #self.vehicle.Waypoints)
 	else
 		self:debug('Course with %d waypoints set up, there seems to be no unload/refill course', #self.vehicle.Waypoints)
-		self.fieldworkCourse = Course(self.vehicle, self.vehicle.Waypoints, 1, #self.vehicle.Waypoints)
+		self.fieldworkCourse = Course(self.vehicle, self.vehicle.Waypoints, false, 1, #self.vehicle.Waypoints)
 	end
 	-- apply the current offset to the fieldwork part (lane+tool, where, confusingly, totalOffsetX contains the toolOffsetX)
 	self.fieldworkCourse:setOffset(self.vehicle.cp.totalOffsetX, self.vehicle.cp.toolOffsetZ)
@@ -577,7 +588,7 @@ function FieldworkAIDriver:manageConvoy()
 
 	-- stop when I'm too close to the combine in front of me
 	if position > 1 then
-		if closestDistance < 100 then
+		if closestDistance < self.vehicle.cp.convoy.minDistance then
 			self:debugSparse('too close (%.1f) to other vehicles in group, holding.', closestDistance)
 			self:setSpeed(0)
 		end
@@ -679,18 +690,20 @@ function FieldworkAIDriver:updateLights()
 	if self.state == self.states.ON_UNLOAD_OR_REFILL_COURSE and self:areBeaconLightsEnabled() then
 		self.vehicle:setBeaconLightsVisibility(true)
 	else
-		self.vehicle:setBeaconLightsVisibility(false)
+		self:updateLightsOnField()
 	end
 end
 
+function FieldworkAIDriver:updateLightsOnField()
+	-- there are no beacons used on the field by default
+	self.vehicle:setBeaconLightsVisibility(false)
+end
+
 function FieldworkAIDriver:startLoweringDurationTimer()
-	-- if not started yet
-	if not self.startedLoweringAt then
-		-- then start but only after everything is unfolded as we don't want to include the
-		-- unfold duration (since we don't fold at the end of the row).
-		if self:isAllUnfolded() then
-			self.startedLoweringAt = self.vehicle.timer
-		end
+	-- then start but only after everything is unfolded as we don't want to include the
+	-- unfold duration (since we don't fold at the end of the row).
+	if self:isAllUnfolded() then
+		self.startedLoweringAt = self.vehicle.timer
 	end
 end
 
@@ -702,7 +715,9 @@ function FieldworkAIDriver:calculateLoweringDuration()
 	end
 end
 
-
+function FieldworkAIDriver:getLoweringDurationMs()
+	return self.loweringDurationMs
+end
 
 --- If we are towing an implement, move to a bigger radius in tight turns
 -- making sure that the towed implement's trajectory remains closer to the
@@ -765,7 +780,6 @@ function FieldworkAIDriver:getOffsetForTowBarLength(r, towBarLength)
 	return rTractor - r
 end
 
-
 function FieldworkAIDriver:getFillLevelInfoText()
 	return 'NEEDS_REFILLING'
 end
@@ -775,6 +789,7 @@ function FieldworkAIDriver:lowerImplements()
 		implement.object:aiImplementStartLine()
 	end
 	self.vehicle:raiseStateChange(Vehicle.STATE_CHANGE_AI_START_LINE)
+	self:startLoweringDurationTimer()
 end
 
 function FieldworkAIDriver:raiseImplements()
@@ -783,3 +798,4 @@ function FieldworkAIDriver:raiseImplements()
 	end
 	self.vehicle:raiseStateChange(Vehicle.STATE_CHANGE_AI_END_LINE)
 end
+

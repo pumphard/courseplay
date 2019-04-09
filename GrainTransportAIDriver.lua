@@ -29,6 +29,11 @@ function GrainTransportAIDriver:init(vehicle)
 	self.vehicle.cp.runCounter = self.runCounter
 end
 
+function GrainTransportAIDriver:setHudContent()
+	AIDriver.setHudContent(self)
+	courseplay.hud:setGrainTransportAIDriverContent(self.vehicle)
+end
+
 function GrainTransportAIDriver:start(ix)
 	self.vehicle:setCruiseControlMaxSpeed(self.vehicle:getSpeedLimit() or math.huge)
 	self:beforeStart()
@@ -114,7 +119,7 @@ end
 -- TODO: move this into onWaypointPassed() instead
 function GrainTransportAIDriver:checkLastWaypoint()
 	local allowedToDrive = true
-	if self.ppc:reachedLastWaypoint() then
+	if self.ppc:getCurrentWaypointIx() == self.course:getNumberOfWaypoints() then
 		courseplay:openCloseCover(self.vehicle, not courseplay.SHOW_COVERS)
 		
 		-- Don't make life too complicated. Whenever we restart the course, we just

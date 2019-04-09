@@ -52,9 +52,14 @@ function CombineUnloadAIDriver:start(ix)
 	self.distanceToObject = 100
 end
 
-function CombineUnloadAIDriver:initStates(states)
-	for key, state in pairs(states) do
-		self.states[key] = state
+function CombineUnloadAIDriver:setHudContent(vehicle)
+	courseplay.hud:setAIDriverContent(vehicle)
+	courseplay.hud:setCombineUnloadAIDriverContent(vehicle)
+end
+
+function CombineUnloadAIDriver:setOnTurnAwayCourse(onTurnAwayCourse)
+	if self.onTurnAwayCourse ~= onTurnAwayCourse then
+		self.onTurnAwayCourse = onTurnAwayCourse
 	end
 end
 

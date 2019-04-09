@@ -16,6 +16,7 @@ function CpManager:setUpDebugChannels()
 			defaultActive[13] = true;
 		end;
 		if getMD5(g_gameSettings:getValue("nickname")) == "3e701b6620453edcd4c170543e72788b" then
+			defaultActive[11] = true;
 			defaultActive[12] = true;
 			defaultActive[13] = true;
 			defaultActive[14] = true;
@@ -27,7 +28,7 @@ function CpManager:setUpDebugChannels()
 
 	-- DEBUG CHANNELS
 	courseplay.numAvailableDebugChannels = 24;
-	courseplay.numDebugChannels = 23;
+	courseplay.numDebugChannels = 24;
 	courseplay.numDebugChannelButtonsPerLine = 12;
 	courseplay.numDebugChannelSections = math.ceil(courseplay.numAvailableDebugChannels / courseplay.numDebugChannelButtonsPerLine);
 	courseplay.debugChannelSection = 1;
@@ -63,6 +64,7 @@ function CpManager:setUpDebugChannels()
 		[21] = 'Debug: Speed setting';
 		[22] = 'Debug: temp MP';
 		[23] = 'Debug: mode8: liquid product transport';
+		[24] = 'Debug: activate cyclic prints'; --this is to prevent spamming the log if not nessesary (e.g. raycasts)
 	};
 
 	courseplay.debugButtonPosData = {};

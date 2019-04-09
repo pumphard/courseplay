@@ -288,13 +288,28 @@ function courseplay:fillTypesMatch(vehicle, fillTrigger, workTool,onlyCheckThisF
 				local matchInThisUnit = false
 				for index,_ in pairs(workTool:getFillUnitSupportedFillTypes(i))do 
 					--loadTriggers
-					if fillTrigger.source ~= nil and fillTrigger.source.providedFillTypes[index] then
-						typesMatch = true
-						matchInThisUnit =true
+					courseplay.debugVehicle(19,vehicle,'fillTypesMatch: checking trigger vs. %s fillunit %d for %d (%s)',tostring(workTool:getName()),i,index,g_fillTypeManager.indexToName[index])
+					if fillTrigger.source ~= nil then
+						if courseplay.debugChannels[19] then
+							courseplay.debugVehicle(19,vehicle,'fillTypesMatch: fillTrigger.source.providedFillTypes:')
+							for index,_ in pairs(fillTrigger.source.providedFillTypes)do
+								courseplay.debugVehicle(19,vehicle,'fillTypesMatch:    %d:%s',index,g_fillTypeManager.indexToName[index])
+							end						
+						end
+						if fillTrigger.source.providedFillTypes[index] then						
+							typesMatch = true
+							matchInThisUnit =true
+						end
 					end
 					--fillTriggers
 					if fillTrigger.sourceObject ~= nil then
 						local fillTypes = fillTrigger.sourceObject:getFillUnitSupportedFillTypes(1)  
+						if courseplay.debugChannels[19] then
+							courseplay.debugVehicle(19,vehicle,'fillTypesMatch: fillTrigger.source.providedFillTypes:')
+							for index,_ in pairs(fillTypes)do
+								courseplay.debugVehicle(19,vehicle,'fillTypesMatch:    %d:%s',index,g_fillTypeManager.indexToName[index])
+							end						
+						end						
 						if fillTypes[index] then 
 							typesMatch = true
 							matchInThisUnit =true
@@ -305,6 +320,7 @@ function courseplay:fillTypesMatch(vehicle, fillTrigger, workTool,onlyCheckThisF
 					end
 				end
 				if matchInThisUnit and selectedFillTypeIsNotInMyFillUnit then
+					courseplay.debugVehicle(19,vehicle,'fillTypesMatch(324): return true')
 					return true;
 				end
 			end
@@ -314,15 +330,21 @@ function courseplay:fillTypesMatch(vehicle, fillTrigger, workTool,onlyCheckThisF
 			if selectedFillType == FillType.UNKNOWN then
 				return true;
 			else
+				courseplay.debugVehicle(19,vehicle,'fillTypesMatch: selectedFillType:%d',selectedFillType)
 				if fillTrigger.source then
-					return fillTrigger.source.providedFillTypes[selectedFillType] or false;
+					local result = fillTrigger.source.providedFillTypes[selectedFillType] or false;
+					courseplay.debugVehicle(19,vehicle,'fillTypesMatch(337): return %s',tostring(result))
+					return result;
 				elseif fillTrigger.sourceObject ~= nil then
 					local fillType = fillTrigger.sourceObject:getFillUnitFillType(1)  
-					return fillType == selectedFillType;
+					local result = fillType == selectedFillType;
+					courseplay.debugVehicle(19,vehicle,'fillTypesMatch(342): return %s',tostring(result))
+					return result;
 				end
 			end		
 		end
 	end
+	courseplay.debugVehicle(19,vehicle,'fillTypesMatch(348): return false')
 	return false;
 end;
 
@@ -1041,11 +1063,11 @@ function courseplay:setupCourse2dData(vehicle)
 
 	-- PDA MAP BG
 	if vehicle.cp.course2dPdaMapOverlay then
-		local leftX	  = bBox.xMin - bgPadding + g_currentMission.ingameMap.worldCenterOffsetX;
-		local bottomY = bBox.yMax + bgPadding + g_currentMission.ingameMap.worldCenterOffsetZ;
-		local rightX  = bBox.xMax + bgPadding + g_currentMission.ingameMap.worldCenterOffsetX;
-		local topY	  = bBox.yMin - bgPadding + g_currentMission.ingameMap.worldCenterOffsetZ;
-		courseplay.utils:setOverlayUVsPx(vehicle.cp.course2dPdaMapOverlay, { leftX, bottomY, rightX, topY }, g_currentMission.ingameMap.worldSizeX, g_currentMission.ingameMap.worldSizeZ);
+		local leftX	  = bBox.xMin - bgPadding + g_currentMission.hud.ingameMap.worldCenterOffsetX;
+		local bottomY = bBox.yMax + bgPadding + g_currentMission.hud.ingameMap.worldCenterOffsetZ;
+		local rightX  = bBox.xMax + bgPadding + g_currentMission.hud.ingameMap.worldCenterOffsetX;
+		local topY	  = bBox.yMin - bgPadding + g_currentMission.hud.ingameMap.worldCenterOffsetZ;
+		courseplay.utils:setOverlayUVsPx(vehicle.cp.course2dPdaMapOverlay, { leftX, bottomY, rightX, topY }, g_currentMission.hud.ingameMap.worldSizeX, g_currentMission.hud.ingameMap.worldSizeZ);
 
 		vehicle.cp.course2dPdaMapOverlay:setPosition(vehicle.cp.course2dBackground.x, vehicle.cp.course2dBackground.y);
 		vehicle.cp.course2dPdaMapOverlay:setDimension(vehicle.cp.course2dBackground.width, vehicle.cp.course2dBackground.height);

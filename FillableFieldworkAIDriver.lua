@@ -39,6 +39,11 @@ function FillableFieldworkAIDriver:init(vehicle)
 	self.refillState = self.states.TO_BE_REFILLED
 end
 
+function FillableFieldworkAIDriver:setHudContent()
+	FieldworkAIDriver.setHudContent(self)
+	courseplay.hud:setFillableFieldworkAIDriverContent(self.vehicle)
+end
+
 function FillableFieldworkAIDriver:changeToUnloadOrRefill()
 	self.refillState = self.states.TO_BE_REFILLED
 	FieldworkAIDriver.changeToUnloadOrRefill(self)
@@ -55,8 +60,8 @@ function FillableFieldworkAIDriver:driveUnloadOrRefill()
 	local isNearWaitPoint, waitPointIx = self.course:hasWaitPointWithinDistance(self.ppc:getCurrentWaypointIx(), 5)
 
 	self:searchForRefillTriggers()
-	if self.temporaryCourse then
-		-- use the courseplay speed limit for fields
+	if self.course:isTemporary() then
+		-- use the courseplay speed limit until we get to the actual unload corse fields (on alignment/temporary)
 		self:setSpeed(self.vehicle.cp.speeds.field)
 	elseif self:getIsInFilltrigger() then
 		-- our raycast in searchForRefillTriggers found a fill trigger
@@ -93,7 +98,7 @@ function FillableFieldworkAIDriver:fillAtWaitPoint()
 	local allowedToDrive = false
 	courseplay:setInfoText(vehicle, string.format("COURSEPLAY_LOADING_AMOUNT;%d;%d",courseplay.utils:roundToLowerInterval(vehicle.cp.totalFillLevel, 100),vehicle.cp.totalCapacity));
 	self:setInfoText('WAIT_POINT')
-	
+	courseplay:openCloseCover(vehicle, not courseplay.SHOW_COVERS)
 	--fillLevel changed in last loop-> start timer
 	if self.prevFillLevelPct == nil or self.prevFillLevelPct ~= vehicle.cp.totalFillLevelPercent then
 		self.prevFillLevelPct = vehicle.cp.totalFillLevelPercent
@@ -106,6 +111,7 @@ function FillableFieldworkAIDriver:fillAtWaitPoint()
 			self:continue()
 			courseplay:resetCustomTimer(vehicle, "fillLevelChange",true);
 			self.prevFillLevelPct = nil
+			courseplay:openCloseCover(vehicle, courseplay.SHOW_COVERS)
 		end
 	end
 	return allowedToDrive

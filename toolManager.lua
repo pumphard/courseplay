@@ -22,11 +22,8 @@ function courseplay:onPostDetachImplement(implementIndex)
 	local sAI= self:getAttachedImplements()
 	if sAI[implementIndex].object == self.cp.attachedCombine then
 		self.cp.attachedCombine = nil;
-		courseplay:setMinHudPage(self);
 	end
 end;
---AttacherJoints.detachImplement = Utils.appendedFunction(AttacherJoints.detachImplement, courseplay.detachImplement);
---Tommi disabled it self is allways nil
 
 function courseplay:resetTools(vehicle)
 	vehicle.cp.workTools = {}
@@ -36,6 +33,9 @@ function courseplay:resetTools(vehicle)
 	vehicle.cp.hasSugarCaneTrailer = false
 	vehicle.cp.hasFertilizerSowingMachine = nil;
 	vehicle.cp.workToolAttached = courseplay:updateWorkTools(vehicle, vehicle);
+	if not vehicle.cp.workToolAttached then
+		courseplay:setCpMode(vehicle, courseplay.MODE_TRANSPORT)
+	end
 	-- Ryan prints fillTypeManager table. Nice cause it prints out all the fillTypes print_r(g_fillTypeManager)
 	-- Reset fill type.
 	--[[
@@ -54,9 +54,7 @@ function courseplay:resetTools(vehicle)
 	vehicle.cp.siloSelectedEasyFillType = 0;
 	courseplay:changeSiloFillType(vehicle, 1, vehicle.cp.siloSelectedFillType);
 
-	if vehicle.cp.hud.currentPage == 1 then
-		courseplay.hud:setReloadPageOrder(vehicle, 1, true);
-	end;
+	courseplay.hud:setReloadPageOrder(vehicle, -1, true);
 	
 	courseplay:calculateWorkWidth(vehicle, true);
 	
@@ -64,34 +62,6 @@ function courseplay:resetTools(vehicle)
 	vehicle.cp.trailerFillDistance = nil;
 	vehicle.cp.tooIsDirty = false;
 end;
-
-function courseplay:changeSiloFillType(vehicle, modifyer, currentSelectedFilltype)
-	local eftl = vehicle.cp.easyFillTypeList;
-	local newVal = 1;
-	if currentSelectedFilltype and currentSelectedFilltype ~= FillType.UNKNOWN then
-		for index, fillType in ipairs(eftl) do
-			if currentSelectedFilltype == fillType then
-				newVal = index;
-			end;
-		end;
-	else
-		newVal = vehicle.cp.siloSelectedEasyFillType + modifyer
-		if newVal < 1 then
-			newVal = #eftl;
-		elseif newVal > #eftl then
-			newVal = 1;
-		end
-	end;
-	if vehicle.cp.siloSelectedFillType ~= eftl[newVal] then
- 		--Mode 1 Run Counter Reset
- 		vehicle.cp.runCounter = 0;
- 		courseplay:changeRunCounter(vehicle, false)
- 	end
-	vehicle.cp.siloSelectedEasyFillType = newVal;
-	vehicle.cp.siloSelectedFillType = eftl[newVal];
-
-end;
-
 
 function courseplay:getAvailableFillTypes(object, fillUnitIndex)
 	-- We really should be using getFillUnitSupportedFillTypes(fillUnitIndex) TODO Make a loop to go through it. 
@@ -595,7 +565,8 @@ function courseplay:setMarkers(vehicle, object)
 				vehicle.cp.aiFrontMarker = abs(frontMarkerCorrection) > 0 and ztt + frontMarkerCorrection or -3;
 			end
 
-			courseplay:debug(('%s: setMarkers(): cp.backMarkerOffset = %s, cp.aiFrontMarker = %s'):format(nameNum(vehicle), tostring(vehicle.cp.backMarkerOffset), tostring(vehicle.cp.aiFrontMarker)), 6);
+			courseplay.debugVehicle(6, vehicle, '(%s) setMarkers(), no work area: cp.backMarkerOffset = %s, cp.aiFrontMarker = %s',
+				nameNum(object), tostring(vehicle.cp.backMarkerOffset), tostring(vehicle.cp.aiFrontMarker))
 		else
 			--- Set front and back marker to default values, so we don't check again.
 			if vehicle.cp.backMarkerOffset == nil then
@@ -671,7 +642,8 @@ function courseplay:setMarkers(vehicle, object)
 		vehicle.cp.aiFrontMarker = object.cp.aiFrontMarker + aLittleBitMore * 0.75;
 	end
 
-	courseplay:debug(('%s: setMarkers(): cp.backMarkerOffset = %s, cp.aiFrontMarker = %s'):format(nameNum(vehicle), tostring(vehicle.cp.backMarkerOffset), tostring(vehicle.cp.aiFrontMarker)), 6);
+	courseplay.debugVehicle(6, vehicle, '(%s), setMarkers(): cp.backMarkerOffset = %s, cp.aiFrontMarker = %s',
+		nameNum(object), tostring(vehicle.cp.backMarkerOffset), tostring(vehicle.cp.aiFrontMarker))
 end;
 
 function courseplay:setFoldedStates(object)
@@ -798,7 +770,7 @@ function courseplay:load_tippers(vehicle, allowedToDrive)
 	
 	if (vehicle.cp.tipperLoadMode == 0 or vehicle.cp.tipperLoadMode == 3) and not driveOn then
 		--if vehicle.cp.ppc:haveJustPassedWaypoint(1) and currentTrailer.cp.currentSiloTrigger == nil then  --vehicle.cp.ppc:haveJustPassedWaypoint(1) doesn't work here
-		if courseplay:havePhysicallyPassedWaypoint(vehicle,1) and currentTrailer.cp.currentSiloTrigger == nil then
+		if vehicle.cp.driver.course:havePhysicallyPassedWaypoint(vehicle.cp.DirectionNode, 1) and currentTrailer.cp.currentSiloTrigger == nil then
 		--- We must be on an loading point at a field so we stop under wp1 and wait for trailer to be filled up
 			vehicle.cp.tipperLoadMode = 2;
 		elseif currentTrailer.cp.currentSiloTrigger then
@@ -1308,6 +1280,7 @@ function courseplay:refillWorkTools(vehicle, driveOnAtPercent, allowedToDrive, l
 				courseplay:openCloseCover(vehicle, not courseplay.SHOW_COVERS,trigger)
 				allowedToDrive, isFilling = courseplay:fillOnTrigger(vehicle, workTool,vehicle.cp.fillTrigger)
 			else
+				courseplay.debugVehicle(19,vehicle,'fillTypes dont match -> reset fillTrigger')
 				courseplay:resetFillTrigger(vehicle)
 			end
 			
@@ -1325,6 +1298,7 @@ function courseplay:refillWorkTools(vehicle, driveOnAtPercent, allowedToDrive, l
 					--	,i,tostring(triggerFilltype),tostring(workTool:getFillUnitFillType(i)),workTool:getFillUnitFillLevelPercentage(i)*100,driveOnAtPercent))
 					if triggerFilltype == workTool:getFillUnitFillType(i)
 					and workTool:getFillUnitFillLevelPercentage(i)*100 > driveOnAtPercent then
+						courseplay.debugVehicle(19,vehicle,'set fillLevel percentage reached -> stop filling and reset fillTrigger')
 						courseplay:setFillOnTrigger(vehicle,workTool,false,trigger)
 						courseplay:resetFillTrigger(vehicle)
 					end				
@@ -1343,6 +1317,7 @@ function courseplay:fillOnTrigger(vehicle, workTool,triggerId)
 		--loadTriggers:placeables,silos
 		--when I'm in the trigger, activate it
 		if trigger:getIsActivatable(objectToFill) and not vehicle.isFuelFilling then
+			courseplay.debugVehicle(19,vehicle,'start filling')
 			courseplay:setFillOnTrigger(vehicle,objectToFill,true,trigger)
 			allowedToDrive = false;
 			vehicle.isFuelFilling = true
@@ -1350,6 +1325,7 @@ function courseplay:fillOnTrigger(vehicle, workTool,triggerId)
 		if vehicle.isFuelFilling then 
 			allowedToDrive = false;
 			if not trigger.isLoading then
+				courseplay.debugVehicle(19,vehicle,'fillTrigger stopped filling -> reset fillTrigger')
 				vehicle.isFuelFilling = nil
 				courseplay:resetFillTrigger(vehicle)
 			end
@@ -1366,6 +1342,7 @@ function courseplay:fillOnTrigger(vehicle, workTool,triggerId)
 				local fillUnits = objectToFill:getFillUnits()
 				for i=1,#fillUnits do
 					if objectToFill:getFillUnitFillLevelPercentage(i)*100 < vehicle.cp.refillUntilPct and courseplay:fillTypesMatch(vehicle, fillTrigger, objectToFill,i) then
+						courseplay.debugVehicle(19,vehicle,'start filling')
 						courseplay:setFillOnTrigger(vehicle,objectToFill,true,trigger,triggerIndex)
 						allowedToDrive = false;
 						vehicle.isFuelFilling = true
@@ -1379,6 +1356,7 @@ function courseplay:fillOnTrigger(vehicle, workTool,triggerId)
 			allowedToDrive = false;
 			--if the trigger stops loading, reset vehicle.isFuelFilling
 			if not objectToFill.spec_fillUnit.fillTrigger.isFilling then 
+				courseplay.debugVehicle(19,vehicle,'fillTrigger stopped filling -> reset fillTrigger')
 				courseplay:resetFillTrigger(vehicle)
 				vehicle.isFuelFilling = nil
 				courseplay:setCustomTimer(vehicle, "resetFillTrigger", 5)
@@ -1387,6 +1365,7 @@ function courseplay:fillOnTrigger(vehicle, workTool,triggerId)
 		--if you get a new pallet, start loading there, otherwise kill the trigger
 		elseif courseplay:timerIsThrough(vehicle, "resetFillTrigger", false) then
 			if #objectToFill.spec_fillUnit.fillTrigger.triggers == 0 then
+				courseplay.debugVehicle(19,vehicle,'timer "resetFillTrigger" is up -> reset fillTrigger')
 				courseplay:resetFillTrigger(vehicle)
 				courseplay:resetCustomTimer(vehicle, "resetFillTrigger", true)
 			end
@@ -1405,14 +1384,16 @@ function courseplay:resetFillTrigger(vehicle)
 		if #vehicle.cp.fillTriggers >1 then
 			table.remove(vehicle.cp.fillTriggers,1)
 			vehicle.cp.fillTrigger = vehicle.cp.fillTriggers[1];
+			courseplay.debugVehicle(19,vehicle,'resetFillTrigger: there are more triggers, take then next one (%d)', vehicle.cp.fillTrigger)
 		--if it was the last one, reset vehicle.cp.fillTrigger
 		else
 			table.remove(vehicle.cp.fillTriggers,1)
 			vehicle.cp.fillTrigger = nil
+			courseplay.debugVehicle(19,vehicle,'resetFillTrigger: no triggers left, reset vehicle.cp.fillTrigger')
 		end
 		--setting the next fwd waypoint for reverse filling. should not cause problems in fwd filling. if it does, find an other way 
 		local driver = vehicle.cp.driver
-		driver.ppc:initialize(driver.course:getNextFwdWaypointIxfromVehiclePosition(driver.ppc:getCurrentWaypointIx(),vehicle,driver.ppc:getLookaheadDistance()));
+		driver.ppc:initialize(driver.course:getNextFwdWaypointIxFromVehiclePosition(driver.ppc:getCurrentWaypointIx(),vehicle,driver.ppc:getLookaheadDistance()));
 	elseif vehicle.cp.fuelFillTrigger then
 		vehicle.cp.fuelFillTrigger = nil
 	end
@@ -1884,9 +1865,42 @@ function courseplay:getAIMarkerWidth(object, logPrefix)
 	end
 end
 
-function courseplay:havePhysicallyPassedWaypoint(vehicle,index)
-	local cx, cz = vehicle.Waypoints[index].cx, vehicle.Waypoints[index].cz; --TODO Tommi convert this to the ppc, course, waypoint, no idea stuff
-	local _,dy,_ = getWorldTranslation(vehicle.cp.DirectionNode);
-	local _,_,tz = worldToLocal(vehicle.cp.DirectionNode,cx,dy,cz) 
-	return tz < 0
+function courseplay:getIsToolValidForCpMode(vehicle,cpModeToCheck)
+	--3,8,9,10 are still disabled
+	if cpModeToCheck == 5 then 
+		return true;
+	elseif vehicle.cp.workToolAttached then
+		local modeValid = false
+		for _, workTool in pairs(vehicle.cp.workTools) do
+			if ((cpModeToCheck == 1 or cpModeToCheck == 2) and workTool.spec_dischargeable and workTool.cp.capacity and workTool.cp.capacity > 0.1) then
+				modeValid = true;
+			elseif cpModeToCheck == 4 then
+				local isSprayer, isSowingMachine = courseplay:isSprayer(workTool), courseplay:isSowingMachine(workTool);
+				if isSprayer or isSowingMachine or workTool.cp.isTreePlanter or workTool.cp.isKuhnDC401 or workTool.cp.isKuhnHR4004 then
+					modeValid = true;
+				end
+			elseif cpModeToCheck == 6 then
+				if (courseplay:isBaler(workTool) 
+				or courseplay:isBaleLoader(workTool) 
+				or courseplay:isSpecialBaleLoader(workTool) 
+				or workTool.cp.hasSpecializationCultivator
+				or courseplay:isCombine(workTool)
+				or workTool.cp.hasSpecializationFruitPreparer 
+				or workTool.cp.hasSpecializationPlow
+				or workTool.cp.hasSpecializationTedder
+				or workTool.cp.hasSpecializationWindrower
+				or workTool.cp.hasSpecializationCutter
+				or workTool.spec_dischargeable
+				or courseplay:isMower(workTool)
+				or courseplay:isAttachedCombine(workTool) 
+				or courseplay:isFoldable(workTool))
+				and not courseplay:isSprayer(workTool)
+				and not courseplay:isSowingMachine(workTool)
+				then
+					modeValid = true;
+				end
+			end
+		end
+		return modeValid 
+	end
 end

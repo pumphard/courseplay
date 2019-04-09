@@ -15,6 +15,23 @@ function courseplay.registerEventListeners(vehicleType)
 	SpecializationUtil.registerEventListener(vehicleType, "onEnterVehicle", courseplay)
 	SpecializationUtil.registerEventListener(vehicleType, "onLeaveVehicle", courseplay)
 	SpecializationUtil.registerEventListener(vehicleType, "onDelete", courseplay)
+	SpecializationUtil.registerEventListener(vehicleType, "onRegisterActionEvents", courseplay)
+	SpecializationUtil.registerEventListener(vehicleType, "onPostDetachImplement", courseplay)
+end
+
+function courseplay:onRegisterActionEvents(isActiveForInput, isActiveForInputIgnoreSelection)
+	--print(string.format("%s: courseplay:onRegisterActionEvents(isActiveForInput(%s) (%s), isActiveForInputIgnoreSelection(%s))",tostring(self:getName()),tostring(isActiveForInput),tostring(self:getIsActiveForInput(true, true)),tostring(isActiveForInputIgnoreSelection)))
+	if self:getIsActiveForInput(true, true) then 
+		courseplay.actionEvents = {}
+		courseplay.inputActionEventIds = {}
+		for index, action in pairs (g_gui.inputManager.nameActions) do
+			if string.match(index,'COURSEPLAY_') then
+				local _,eventId = self:addActionEvent(courseplay.actionEvents, index, self, courseplay.inputActionCallback, true, true, false, true, nil);
+				courseplay.inputActionEventIds[index] = eventId;
+				g_gui.inputManager:setActionEventTextVisibility(eventId, false)
+			end
+		end
+	end
 end
 
 if courseplay.houstonWeGotAProblem then
@@ -66,7 +83,17 @@ function courseplay:attachablePostLoad(xmlFile)
 		self.name = courseplay:getObjectName(self, xmlFile);
 	end;
 end;
-Attachable.postLoad = Utils.appendedFunction(Attachable.postLoad, courseplay.attachablePostLoad);
+Attachable.onPostLoad = Utils.appendedFunction(Attachable.onPostLoad, courseplay.attachablePostLoad);
+
+function courseplay:articulatedAxisOnLoad()
+	-- Due to a bug in Giant's ArticulatedAxis:onLoad() maxRotation has a value in degrees instead of radians,
+	-- fix that here.
+	if self.maxRotation > math.pi then
+		print(string.format('## %s: fixing maxRotation, setting to %.0f degrees', self:getName(), self.maxRotation))
+		self.maxRotation = math.rad(self.maxRotation)
+	end
+end
+ArticulatedAxis.onLoad = Utils.appendedFunction(ArticulatedAxis.onLoad, courseplay.articulatedAxisOnLoad)
 
 function courseplay:attachableDelete()
 	if self.cp ~= nil then
