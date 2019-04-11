@@ -1043,19 +1043,47 @@ end
 --- PATHFINDING
 ------------------------------------------------------------------------------
 
---- Start course (with pathfinding if needed) and set course as the current one
---- Will find a path on a field avoiding fruit as far as possible from the
---- current position to the start of course.
+--- Start course with pathfinding
+--- Will find a path on a field avoiding fruit as much as possible from the
+--- current position to waypoint ix of course and start driving.
+--- When waypoint ix of course reached, switch to the course and continue driving.
+---
+--- If no path found will use an alignment course to reach waypoint ix of course.
 ---@param course Course
 ---@param ix number
 ---@param vehicleIsOnField boolean use the vehicle's position to determine for which field
 -- we need a path. If false, we assume that the course's waypoint at ix is on the field.
----@return boolean true when an alignment course was added
+---@return boolean true when a pathfinding successfully started or an alignment course was added
 function AIDriver:startCourseWithPathfinding(course, ix, vehicleIsOnField)
+	local tx, _, tz = course:getWaypointPosition(ix)
+	self.courseAfterPathfinding = course
+	self.waypointIxAfterPathfinding = ix
+	if self:driveToPointWithPathfinding(tx, tz, vehicleIsOnField) then
+		return true
+	else
+		self.courseAfterPathfinding = nil
+		self.waypointIxAfterPathfinding = nil
+		return self:startCourseWithAlignment(course, ix)
+	end
+end
+
+--- Start driving to a point with pathfinding
+--- Will find a path on a field avoiding fruit as much as possible from the
+--- current position to the given coordinates. Will call onEndCourse when it
+--- reaches that point, so you'll have to have your own implementation of that
+---
+--- If no path is found, onNoPathFound() is called, you'll need your own implementation
+--- of that to handle that case.
+---
+---@param tx number target coordinate
+---@param tz number target coordinate
+---@param vehicleIsOnField boolean use the vehicle's position to determine for which field
+-- we need a path. If false, we assume that target point is on the field.
+---@return boolean true when a pathfinding successfully started
+function AIDriver:driveToPointWithPathfinding(tx, tz, vehicleIsOnField)
 	self.turnIsDriving = false
 	if self.vehicle.cp.realisticDriving then
 		local vx, _, vz = getWorldTranslation(self.vehicle.rootNode)
-		local tx, _, tz = course:getWaypointPosition(ix)
 
 		local fieldNum
 		if vehicleIsOnField then
@@ -1070,8 +1098,6 @@ function AIDriver:startCourseWithPathfinding(course, ix, vehicleIsOnField)
 		if fieldNum > 0 then
 			if not self.pathfinder:isActive() then
 				self:debug('Start pathfinding on field %d', fieldNum)
-				self.waypointIxAfterPathfinding = ix
-				self.courseAfterPathfinding = course
 				self.pathFindingStartedAt = self.vehicle.timer
 				-- TODO: move this coordinate transformation into the pathfinder, it is internal
 				local done, path = self.pathfinder:start({x = vx, y = -vz}, {x = tx, y = -tz},
@@ -1087,9 +1113,9 @@ function AIDriver:startCourseWithPathfinding(course, ix, vehicleIsOnField)
 			self:debug('Do not know which field I am on, falling back to alignment course')
 		end
 	else
-		self:debug('Pathfinding turned off, falling back to alignment course')
+		self:debug('Pathfinding turned off, falling back to dumb mode')
 	end
-	return self:startCourseWithAlignment(course, ix)
+	return false
 end
 
 function AIDriver:updatePathfinding()
@@ -1114,15 +1140,17 @@ function AIDriver:onPathfindingDone(path)
 		if temporaryCourse:getLength() > self.vehicle.cp.turnDiameter * 3 and temporaryCourse:shorten(self.vehicle.cp.turnDiameter * 1.5) then
 			self:debug('Path shortened to accommodate alignment, has now %d waypoints', temporaryCourse:getNumberOfWaypoints())
 			-- append an alignment course at the end of the path to the target waypoint
-			local x, _, z = temporaryCourse:getWaypointPosition(temporaryCourse:getNumberOfWaypoints())
-			local tx, _, tz = self.courseAfterPathfinding:getWaypointPosition(self.waypointIxAfterPathfinding)
-			local alignmentWaypoints = courseplay:getAlignWpsToTargetWaypoint(self.vehicle, x, z, tx, tz,
-				math.rad(self.courseAfterPathfinding:getWaypointAngleDeg(self.waypointIxAfterPathfinding)), true)
-			if alignmentWaypoints then
-				self:debug('Append an alignment course with %d waypoints to the path', #alignmentWaypoints)
-				temporaryCourse:append(alignmentWaypoints)
-			else
-				self:debug('Could not append an alignment course to the path')
+			if self.courseAfterPathfinding then
+				local x, _, z = temporaryCourse:getWaypointPosition(temporaryCourse:getNumberOfWaypoints())
+				local tx, _, tz = self.courseAfterPathfinding:getWaypointPosition(self.waypointIxAfterPathfinding)
+				local alignmentWaypoints = courseplay:getAlignWpsToTargetWaypoint(self.vehicle, x, z, tx, tz,
+					math.rad(self.courseAfterPathfinding:getWaypointAngleDeg(self.waypointIxAfterPathfinding)), true)
+				if alignmentWaypoints then
+					self:debug('Append an alignment course with %d waypoints to the path', #alignmentWaypoints)
+					temporaryCourse:append(alignmentWaypoints)
+				else
+					self:debug('Could not append an alignment course to the path')
+				end
 			end
 			self:startCourse(temporaryCourse, 1, self.courseAfterPathfinding, self.waypointIxAfterPathfinding)
 			return true
@@ -1141,12 +1169,16 @@ end
 ---@return boolean true if a temporary course is started
 function AIDriver:onNoPathFound(...)
 	self:debug(...)
-	if not self:startCourseWithAlignment(self.courseAfterPathfinding, self.waypointIxAfterPathfinding) then
-		-- no alignment course needed or possible, skip to the end of temp course to continue on the normal course
-		self:continueOnNextCourse(self.courseAfterPathfinding, self.waypointIxAfterPathfinding)
-		return false
+	if self.courseAfterPathfinding then
+		if not self:startCourseWithAlignment(self.courseAfterPathfinding, self.waypointIxAfterPathfinding) then
+			-- no alignment course needed or possible, skip to the end of temp course to continue on the normal course
+			self:continueOnNextCourse(self.courseAfterPathfinding, self.waypointIxAfterPathfinding)
+			return false
+		else
+			return true
+		end
 	else
-		return true
+		return false
 	end
 end
 
