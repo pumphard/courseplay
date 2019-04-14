@@ -9,6 +9,13 @@ function courseplay:attachImplement(implement)
 			if attacherVehicle.spec_aiVehicle then 
 				attacherVehicle.cp.tooIsDirty = true; 
 			end;
+			
+			if attacherVehicle.getAttacherVehicle then
+				local firstAttacherVehicle =  attacherVehicle:getAttacherVehicle()
+				if firstAttacherVehicle~= nil and firstAttacherVehicle.spec_aiVehicle then
+					firstAttacherVehicle.cp.tooIsDirty = true; 
+				end;				
+			end
 		end
 		courseplay:setAttachedCombine(self);
 	end
@@ -555,12 +562,12 @@ function courseplay:setMarkers(vehicle, object)
 			-- Calculate the offset based on the distances
 			local ztt = vehicleDistances.turningNodeToRearTrailerAttacherJoints[activeInputAttacherJoint.jointType] * -1;
 
-			local backMarkerCorrection = Utils.getNoNil(object.cp.backMarkerOffsetCorection, 0);
+			local backMarkerCorrection = Utils.getNoNil(object.cp.backMarkerOffsetCorrection, 0);
 			if vehicle.cp.backMarkerOffset == nil or (abs(backMarkerCorrection) > 0 and  ztt + backMarkerCorrection > vehicle.cp.backMarkerOffset) then
 				vehicle.cp.backMarkerOffset = abs(backMarkerCorrection) > 0 and ztt + backMarkerCorrection or 0;
 			end
 
-			local frontMarkerCorrection = Utils.getNoNil(object.cp.frontMarkerOffsetCorection, 0);
+			local frontMarkerCorrection = Utils.getNoNil(object.cp.frontMarkerOffsetCorrection, 0);
 			if vehicle.cp.aiFrontMarker == nil or (abs(frontMarkerCorrection) > 0 and  ztt + frontMarkerCorrection < vehicle.cp.aiFrontMarker) then
 				vehicle.cp.aiFrontMarker = abs(frontMarkerCorrection) > 0 and ztt + frontMarkerCorrection or -3;
 			end
@@ -580,6 +587,7 @@ function courseplay:setMarkers(vehicle, object)
 		return;
 	end
 
+	local backMarkerAreaType, frontMarkerAreaType
 	-- TODO: figure out what other types to avoid, the FS17 types ending with DROP do not seem to exist anymore
 	local avoidType = {
 		[WorkAreaType.RIDGEMARKER] = true
@@ -623,9 +631,11 @@ function courseplay:setMarkers(vehicle, object)
 						object:getName(), type, g_workAreaTypeManager.workAreaTypes[area.type].name, tostring(j), ztt)
 					if object.cp.backMarkerOffset == nil or ztt + Utils.getNoNil(object.cp.backMarkerOffsetCorection, 0) > object.cp.backMarkerOffset then
 						object.cp.backMarkerOffset = ztt + Utils.getNoNil(object.cp.backMarkerOffsetCorection, 0);
+						backMarkerAreaType = area.type
 					end
 					if object.cp.aiFrontMarker == nil or ztt + Utils.getNoNil(object.cp.frontMarkerOffsetCorection, 0) < object.cp.aiFrontMarker then
 						object.cp.aiFrontMarker = ztt + Utils.getNoNil(object.cp.frontMarkerOffsetCorection, 0);
+						frontMarkerAreaType = area.type
 					end
 				end
 			end
@@ -640,6 +650,21 @@ function courseplay:setMarkers(vehicle, object)
 
 	if vehicle.cp.aiFrontMarker == nil or object.cp.aiFrontMarker > (vehicle.cp.aiFrontMarker - aLittleBitMore) then
 		vehicle.cp.aiFrontMarker = object.cp.aiFrontMarker + aLittleBitMore * 0.75;
+	end
+
+	-- Sprayers have a rectangular work area but the spray is at an angle so the front of the area is not covered.
+	-- Also, some sprayers have multiple work areas depending on the configuration and fill type which can also
+	-- move the front or back markers.
+	-- This leads to little unsprayed rectangles at the row ends as the turn code turns off the sprayer when the back
+	-- marker (which is actually in the front when the implement is attached to the back of the vehicle) reaches the
+	-- field edge.
+	-- So, if both the front and back markers are from sprayer work areas, move the back marker to where the front
+	-- marker is which will result turning off the sprayer later.
+	if frontMarkerAreaType and backMarkerAreaType and
+		frontMarkerAreaType == WorkAreaType.SPRAYER and
+		backMarkerAreaType == WorkAreaType.SPRAYER then
+		courseplay.debugVehicle(6, vehicle, "Forcing backmarker to frontmarker for sprayer")
+		vehicle.cp.backMarkerOffset = vehicle.cp.aiFrontMarker
 	end
 
 	courseplay.debugVehicle(6, vehicle, '(%s), setMarkers(): cp.backMarkerOffset = %s, cp.aiFrontMarker = %s',
@@ -755,11 +780,11 @@ function courseplay:load_tippers(vehicle, allowedToDrive)
 
 	local currentTrailer = vehicle.cp.workTools[vehicle.cp.currentTrailerToFill];
 
-	local driveOn = vehicle.cp.isLoaded;
+	local driveOn = vehicle.cp.driveUnloadNow;
 		
-	if not currentTrailer.cp.realUnloadOrFillNode and not driveOn then
+	if not currentTrailer.cp.realUnloadOrFillNode then
 		currentTrailer.cp.realUnloadOrFillNode = courseplay:getRealUnloadOrFillNode(currentTrailer);
-		if not currentTrailer.cp.realUnloadOrFillNode then
+		if not currentTrailer.cp.realUnloadOrFillNode or not currentTrailer.spec_trailer then
 			if vehicle.cp.numWorkTools > vehicle.cp.currentTrailerToFill then
 				vehicle.cp.currentTrailerToFill = vehicle.cp.currentTrailerToFill + 1;
 			else
@@ -767,6 +792,8 @@ function courseplay:load_tippers(vehicle, allowedToDrive)
 			end;
 		end;
 	end;
+	
+	currentTrailer = vehicle.cp.workTools[vehicle.cp.currentTrailerToFill];
 	
 	if (vehicle.cp.tipperLoadMode == 0 or vehicle.cp.tipperLoadMode == 3) and not driveOn then
 		--if vehicle.cp.ppc:haveJustPassedWaypoint(1) and currentTrailer.cp.currentSiloTrigger == nil then  --vehicle.cp.ppc:haveJustPassedWaypoint(1) doesn't work here
@@ -787,7 +814,7 @@ function courseplay:load_tippers(vehicle, allowedToDrive)
 	local unloadDistance = 1000;
 	local backUpDistance = 1000;
 	local trailerX,_,trailerZ = getWorldTranslation(currentTrailer.cp.realUnloadOrFillNode);
-
+	
 	if not driveOn then
 		if vehicle.cp.tipperLoadMode == 1 then
 			local directionNode = vehicle.aiVehicleDirectionNode or vehicle.cp.DirectionNode;
@@ -825,7 +852,7 @@ function courseplay:load_tippers(vehicle, allowedToDrive)
 				courseplay:debug(('%s: SiloTrigger: selectedFillType = %s, isLoading = %s'):format(nameNum(vehicle), tostring(g_fillTypeManager.indexToName[siloTrigger.selectedFillType]), tostring(siloTrigger.isLoading)), 2);
 			elseif siloTrigger.isLoading then
 				courseplay:setCustomTimer(vehicle, 'siloEmptyMessageDelay', 1);
-			elseif siloIsEmpty and vehicle.cp.totalFillLevelPercent < vehicle.cp.driveOnAtFillLevel and courseplay:timerIsThrough(vehicle, 'siloEmptyMessageDelay') then
+			elseif siloIsEmpty and vehicle.cp.totalFillLevelPercent < vehicle.cp.refillUntilPct and courseplay:timerIsThrough(vehicle, 'siloEmptyMessageDelay') then
 				CpManager:setGlobalInfoText(vehicle, 'FARM_SILO_IS_EMPTY');
 			end;
 		else
@@ -834,21 +861,27 @@ function courseplay:load_tippers(vehicle, allowedToDrive)
 	end;
 
 	-- drive on when required fill level is reached
+	-- in case of waiting to be loaded e.g. by shovel 
 	if not driveOn and (courseplay:timerIsThrough(vehicle, 'fillLevelChange') or vehicle.cp.prevFillLevelPct == nil) then
-		if vehicle.cp.prevFillLevelPct ~= nil and vehicle.cp.totalFillLevelPercent == vehicle.cp.prevFillLevelPct and vehicle.cp.totalFillLevelPercent > vehicle.cp.driveOnAtFillLevel then
+		if vehicle.cp.prevFillLevelPct ~= nil and vehicle.cp.totalFillLevelPercent == vehicle.cp.prevFillLevelPct and vehicle.cp.totalFillLevelPercent > vehicle.cp.refillUntilPct then
 			driveOn = true;
 		end;
 		vehicle.cp.prevFillLevelPct = vehicle.cp.totalFillLevelPercent;
 		courseplay:setCustomTimer(vehicle, 'fillLevelChange', 7);
 	end;
+	
+	--if established on a fill trigger go on immediately when level is reached
+	if currentTrailer.cp.currentSiloTrigger ~= nil and (vehicle.cp.totalFillLevelPercent > vehicle.cp.refillUntilPct or vehicle.cp.driveUnloadNow) then
+		courseplay:setFillOnTrigger(vehicle,currentTrailer,false,currentTrailer.cp.currentSiloTrigger)
+		driveOn = true;
+	end;	
 
 	if vehicle.cp.totalFillLevelPercent == 100 or driveOn then
 		vehicle.cp.prevFillLevelPct = nil;
-		courseplay:setIsLoaded(vehicle, true);
+		courseplay:setDriveUnloadNow(vehicle, true);
 		vehicle.cp.trailerFillDistance = nil;
 		vehicle.cp.currentTrailerToFill = nil;
 		vehicle.cp.tipperLoadMode = 0;
-		courseplay:changeRunCounter(vehicle, true)
 		return allowedToDrive;
 	end;
 
@@ -859,7 +892,7 @@ function courseplay:load_tippers(vehicle, allowedToDrive)
 				vehicle.cp.currentTrailerToFill = vehicle.cp.currentTrailerToFill + 1;
 			else
 				vehicle.cp.prevFillLevelPct = nil;
-				courseplay:setIsLoaded(vehicle, true);
+				courseplay:setDriveUnloadNow(vehicle, true);
 				vehicle.cp.trailerFillDistance = nil;
 				vehicle.cp.currentTrailerToFill = nil;
 				vehicle.cp.tipperLoadMode = 0;
@@ -1407,13 +1440,14 @@ function courseplay:setFillOnTrigger(vehicle,workTool,fillOrder,trigger,triggerI
 		if trigger.onActivateObject then
 			if trigger.autoStart then
 				trigger:onActivateObject(vehicle) 
-			else
+			elseif not trigger.isLoading then
 				--force Diesel when I'm in fuelFillTrigger or the selected fillType in fillTrigger and start the autoload
 				trigger.autoStart = true
 				trigger:onActivateObject(vehicle) 
 				trigger.selectedFillType = (vehicle.cp.fuelFillTrigger and FillType.DIESEL) or (vehicle.cp.siloSelectedFillType ~= FillType.UNKNOWN and vehicle.cp.siloSelectedFillType) or courseplay:getOnlyPossibleFillType(vehicle,workTool,trigger) 
 				g_effectManager:setFillType(trigger.effects, trigger.selectedFillType)
 				trigger.autoStart = false
+				courseplay.hud:setReloadPageOrder(vehicle, vehicle.cp.hud.currentPage, true);
 			end
 		elseif trigger.sourceObject ~= nil then
 			--move the wanted trigger to the top of the table, setFillUnitIsFilling takes allways the trigger[1] 
@@ -1428,7 +1462,9 @@ function courseplay:setFillOnTrigger(vehicle,workTool,fillOrder,trigger,triggerI
 	else
 		--stop filling
 		if trigger.onActivateObject then 
-			trigger:onActivateObject(vehicle)
+			if trigger.isLoading then
+				trigger:onActivateObject(vehicle)
+			end
 		elseif trigger.sourceObject then
 			workTool:setFillUnitIsFilling(false)							
 		end
@@ -1865,42 +1901,56 @@ function courseplay:getAIMarkerWidth(object, logPrefix)
 	end
 end
 
-function courseplay:getIsToolValidForCpMode(vehicle,cpModeToCheck)
-	--3,8,9,10 are still disabled
+function courseplay:getIsToolCombiValidForCpMode(vehicle,cpModeToCheck)
+	--5 is always valid
 	if cpModeToCheck == 5 then 
 		return true;
-	elseif vehicle.cp.workToolAttached then
-		local modeValid = false
+	end
+	local modeValid = false
+	if vehicle.cp.workToolAttached then
 		for _, workTool in pairs(vehicle.cp.workTools) do
-			if ((cpModeToCheck == 1 or cpModeToCheck == 2) and workTool.spec_dischargeable and workTool.cp.capacity and workTool.cp.capacity > 0.1) then
-				modeValid = true;
-			elseif cpModeToCheck == 4 then
-				local isSprayer, isSowingMachine = courseplay:isSprayer(workTool), courseplay:isSowingMachine(workTool);
-				if isSprayer or isSowingMachine or workTool.cp.isTreePlanter or workTool.cp.isKuhnDC401 or workTool.cp.isKuhnHR4004 then
-					modeValid = true;
-				end
-			elseif cpModeToCheck == 6 then
-				if (courseplay:isBaler(workTool) 
-				or courseplay:isBaleLoader(workTool) 
-				or courseplay:isSpecialBaleLoader(workTool) 
-				or workTool.cp.hasSpecializationCultivator
-				or courseplay:isCombine(workTool)
-				or workTool.cp.hasSpecializationFruitPreparer 
-				or workTool.cp.hasSpecializationPlow
-				or workTool.cp.hasSpecializationTedder
-				or workTool.cp.hasSpecializationWindrower
-				or workTool.cp.hasSpecializationCutter
-				or workTool.spec_dischargeable
-				or courseplay:isMower(workTool)
-				or courseplay:isAttachedCombine(workTool) 
-				or courseplay:isFoldable(workTool))
-				and not courseplay:isSprayer(workTool)
-				and not courseplay:isSowingMachine(workTool)
-				then
-					modeValid = true;
-				end
+			if courseplay:getIsToolValidForCpMode(workTool,cpModeToCheck) then
+				modeValid = true
 			end
 		end
-		return modeValid 
 	end
+	if not modeValid then
+		modeValid = courseplay:getIsToolValidForCpMode(vehicle,cpModeToCheck)
+	end
+	return modeValid
+end
+
+function courseplay:getIsToolValidForCpMode(workTool,cpModeToCheck)
+	local modeValid = false
+	--3,8,9,10 are still disabled
+	if ((cpModeToCheck == 1 or cpModeToCheck == 2) and workTool.spec_dischargeable and workTool.cp.capacity and workTool.cp.capacity > 0.1) then
+		modeValid = true;
+	elseif cpModeToCheck == 4 then
+		local isSprayer, isSowingMachine = courseplay:isSprayer(workTool), courseplay:isSowingMachine(workTool);
+		if isSprayer or isSowingMachine or workTool.cp.isTreePlanter or workTool.cp.isKuhnDC401 or workTool.cp.isKuhnHR4004 then
+			modeValid = true;
+		end
+	elseif cpModeToCheck == 6 then
+		if (courseplay:isBaler(workTool) 
+		or courseplay:isBaleLoader(workTool) 
+		or courseplay:isSpecialBaleLoader(workTool) 
+		or workTool.cp.hasSpecializationPickup	
+		or workTool.cp.hasSpecializationCultivator
+		or courseplay:isCombine(workTool)
+		or workTool.cp.hasSpecializationFruitPreparer 
+		or workTool.cp.hasSpecializationPlow
+		or workTool.cp.hasSpecializationTedder
+		or workTool.cp.hasSpecializationWindrower
+		or workTool.cp.hasSpecializationCutter
+		--or workTool.spec_dischargeable
+		or courseplay:isMower(workTool)
+		or courseplay:isAttachedCombine(workTool) 
+		or courseplay:isFoldable(workTool))
+		and not courseplay:isSprayer(workTool)
+		and not courseplay:isSowingMachine(workTool)
+		then
+			modeValid = true;
+		end
+	end
+	return modeValid ;
 end

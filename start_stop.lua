@@ -158,12 +158,10 @@ function courseplay:start(self)
 			end
 		end
 				
-		if workTool.sprayer ~= nil and self.cp.hasFertilizerSowingMachine then
-			if workTool.cp.orignalAllowsSpraying == nil then
-				workTool.cp.orignalAllowsSpraying = workTool.allowsSpraying
-			end
-			workTool.allowsSpraying = self.cp.fertilizerEnabled
+		if workTool.spec_sprayer ~= nil and self.cp.hasFertilizerSowingMachine then
+			workTool.fertilizerEnabled = self.cp.fertilizerEnabled
 		end	
+		
 		if workTool.cp.isSugarCaneAugerWagon then
 			isReversePossible = false
 		end
@@ -355,9 +353,9 @@ function courseplay:start(self)
 	end --END if modeState == 0
 
 	if self.cp.waypointIndex > 2 and self.cp.mode ~= 4 and self.cp.mode ~= 6 and self.cp.mode ~= 8 then
-		courseplay:setIsLoaded(self, true);
+		courseplay:setDriveUnloadNow(self, true);
 	elseif self.cp.mode == 4 or self.cp.mode == 6 then
-		courseplay:setIsLoaded(self, false);
+		courseplay:setDriveUnloadNow(self, false);
 		self.cp.hasUnloadingRefillingCourse = self.cp.numWaypoints > self.cp.stopWork + 7;
 		self.cp.hasTransferCourse = self.cp.startWork > 5
 		if  self.Waypoints[self.cp.stopWork].cx == self.Waypoints[self.cp.startWork].cx 
@@ -373,13 +371,13 @@ function courseplay:start(self)
 		end
 		courseplay:debug(string.format("%s: numWaypoints=%d, stopWork=%d, finishWork=%d, hasUnloadingRefillingCourse=%s,hasTransferCourse=%s, waypointIndex=%d", nameNum(self), self.cp.numWaypoints, self.cp.stopWork, self.cp.finishWork, tostring(self.cp.hasUnloadingRefillingCourse),tostring(self.cp.hasTransferCourse), self.cp.waypointIndex), 12);
 	elseif self.cp.mode == 8 then
-		courseplay:setIsLoaded(self, false);
+		courseplay:setDriveUnloadNow(self, false);
 	end
 
 	if self.cp.startAtPoint == courseplay.START_AT_FIRST_POINT then
 		if self.cp.mode == 2 or self.cp.mode == 3 then
 			courseplay:setWaypointIndex(self, 3);
-			courseplay:setIsLoaded(self, true);
+			courseplay:setDriveUnloadNow(self, true);
 		else
 			courseplay:setWaypointIndex(self, 1);
 			local distToFirst = courseplay:distanceToPoint( self, self.Waypoints[ 1 ].cx, 0, self.Waypoints[ 1 ].cz )
@@ -636,12 +634,6 @@ function courseplay:stop(self)
 		courseplay:resetCustomTimer(self,'fuelSaveTimer',true)
 	end
 
-	if self.cp.runReset == true then
- 		self.cp.runCounter = 0;
- 		self.cp.runReset = false;
- 		courseplay:changeRunCounter(self, false)
- 	end;
-
 	-- Reset the reset character timer.
 	courseplay:resetCustomTimer(self, "resetCharacter", true);
 
@@ -679,12 +671,10 @@ function courseplay:stop(self)
 			end
 			tool.cp.originalCapacities = nil
 		end
-		if tool.cp.orignalAllowsSpraying ~= nil then
-			tool.allowsSpraying = tool.cp.orignalAllowsSpraying
-			tool.cp.orignalAllowsSpraying = nil
+		if tool.fertilizerEnabled ~= nil then
+			tool.fertilizerEnabled = nil
 		end
 	end
-
 	if self.cp.directionNodeToTurnNodeLength ~= nil then
 		self.cp.directionNodeToTurnNodeLength = nil
 	end

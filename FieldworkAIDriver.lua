@@ -319,7 +319,7 @@ function FieldworkAIDriver:changeToFieldwork()
 	self.state = self.states.ON_FIELDWORK_COURSE
 	self.fieldworkState = self.states.WAITING_FOR_LOWER
 	self:startWork()
-	self:setIsLoaded(false);
+	self:setDriveUnloadNow(false);
 	self:refreshHUD();
 end
 
@@ -799,3 +799,6 @@ function FieldworkAIDriver:raiseImplements()
 	self.vehicle:raiseStateChange(Vehicle.STATE_CHANGE_AI_END_LINE)
 end
 
+function FieldworkAIDriver:getCanShowDriveOnButton()
+	return self.state == self.states.ON_FIELDWORK_COURSE 
+end
