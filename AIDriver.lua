@@ -153,6 +153,7 @@ function AIDriver:init(vehicle)
 	self.pathfinder = Pathfinder()
 	self:setHudContent()
 end
+
 function AIDriver:setHudContent()
 	courseplay.hud:setAIDriverContent(self.vehicle)
 end

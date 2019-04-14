@@ -82,12 +82,17 @@ end
 
 function CombineManager:manageAssignments()
 	for tractor,tractorData in pairs (self.allTractors)do
-		if tractorData.registeredCombine == nil then
-			local chopper = self:findChopperToAssign(tractorData)
-			if chopper then
-				self:registerAtCombine(tractor,chopper)
-				return
+		if tractorData.isOnField > 0 then
+		--use the position of the tractor or the selected field number to get a combine to assign
+			if tractorData.registeredCombine == nil then
+				local chopper = self:findChopperToAssign(tractorData)
+				if chopper then
+					self:registerAtCombine(tractor,chopper)
+					return
+				end
 			end
+		else
+		--search for combine in the old fashioned way
 		end
 	end		
 end

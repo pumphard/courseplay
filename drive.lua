@@ -10,8 +10,11 @@ function courseplay:drive(self, dt)
 	if self.cp.drivingMode:is(DrivingModeSetting.DRIVING_MODE_AIDRIVER) and self.cp.driver then
 		self.cp.driver:drive(dt)
 		return
+	else
+		print("somethings wrong here, driver is not set")
 	end
 
+	
 --[[ This is FS17 code	-- Reset Character each 2 min to prevent glitching out.
 	if courseplay:timerIsThrough(self, "resetCharacter", false) then
 		if self.currentHelper == nil then

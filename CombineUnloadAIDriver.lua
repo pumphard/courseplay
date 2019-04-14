@@ -39,6 +39,12 @@ function CombineUnloadAIDriver:init(vehicle)
 	self:switchFieldState(self.states.LOOKING_FOR_COMBINE)
 end
 
+function CombineUnloadAIDriver:setHudContent()
+	AIDriver.setHudContent(self)
+	courseplay.hud:setCombineUnloadAIDriverContent(self.vehicle)
+end
+
+
 function CombineUnloadAIDriver:start(ix)
 	self.vehicle:setCruiseControlMaxSpeed(self.vehicle:getSpeedLimit() or math.huge)
 	self:beforeStart()
@@ -50,11 +56,6 @@ function CombineUnloadAIDriver:start(ix)
 		self.state = self.states.UNLOADING
 	end
 	self.distanceToObject = 100
-end
-
-function CombineUnloadAIDriver:setHudContent(vehicle)
-	courseplay.hud:setAIDriverContent(vehicle)
-	courseplay.hud:setCombineUnloadAIDriverContent(vehicle)
 end
 
 function CombineUnloadAIDriver:setOnTurnAwayCourse(onTurnAwayCourse)
@@ -87,12 +88,13 @@ function CombineUnloadAIDriver:driveOnField(dt)
 	--check all tippers and take the next one with free space on it
 	self.currentTipper = self:manageTippers()
 	
-	-- ask th combine manager to assign me to a combine
+	-- ask the combine manager to assign me to a combine
 	if self.fieldState == self.states.LOOKING_FOR_COMBINE then
 		self:stop()
 		self.combineToUnload = self:lookForCombines()
 		--if combine manager assigned me to a combine, search a way to it
 		if self.combineToUnload ~= nil then
+			self:calculateCombineOffset(self.combineToUnload)
 			self:switchFieldState(self.states.FIND_THE_WAY_TO_COMBINE)
 		end
 	elseif self.fieldState == self.states.FIND_THE_WAY_TO_COMBINE then
@@ -158,10 +160,8 @@ function CombineUnloadAIDriver:followPipe(dt)
 	if self.combineToUnload.cp.isChopper then
 		tx,tz,trailerZOffset,combineZOffset,driveBehindChopper = self:getChoppersTargetUnloadingCoords()
 		
-		if not driveBehindChopper then	
-			--driving beside the chopper
-			allowedToDrive, speed = self:getSpeedBesideChopper(self.combineToUnload,trailerZOffset,combineZOffset)
-		else
+		if driveBehindChopper then
+			print("driveBehindChopper")
 			--driving behind the chopper
 			allowedToDrive, speed = self:getSpeedBehindChopper(self.combineToUnload)
 			--if the chopper in front of me is backing up, move a bit backwards to make space
@@ -181,6 +181,10 @@ function CombineUnloadAIDriver:followPipe(dt)
 					return
 				end
 			end
+		else
+			print("driving beside the chopper")
+			--driving beside the chopper
+			allowedToDrive, speed = self:getSpeedBesideChopper(self.combineToUnload,trailerZOffset,combineZOffset)
 		end
 	else
 		--this is the follow combine part to be done
@@ -269,7 +273,7 @@ end
 
 function CombineUnloadAIDriver:checkLastWaypoint()
 	local allowedToDrive = true
-	if self.ppc:reachedLastWaypoint() then
+	if self.course:havePhysicallyPassedWaypoint(self.vehicle.cp.DirectionNode,#self.course.waypoints) then
 		courseplay:openCloseCover(self.vehicle, not courseplay.SHOW_COVERS)
 		self:changeToField()
 	end
@@ -278,10 +282,12 @@ end
 
 
 function CombineUnloadAIDriver:changeToUnload()
+	print("CombineUnloadAIDriver:changeToUnload()")
 	self.state = self.states.UNLOADING
 end
 
 function CombineUnloadAIDriver:changeToField()
+	print("CombineUnloadAIDriver:changeToField()")
 	self.state = self.states.ON_FIELD
 end
 

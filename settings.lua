@@ -21,11 +21,11 @@ function courseplay:setCpMode(vehicle, modeNum)
 		--courseplay.buttons:setActiveEnabled(vehicle, 'all');
 
 		--if not CpManager.isDeveloper then
-			if modeNum == courseplay.MODE_COMBI then
-				vehicle.cp.drivingMode:set(DrivingModeSetting.DRIVING_MODE_NORMAL)
-			else
-				vehicle.cp.drivingMode:set(DrivingModeSetting.DRIVING_MODE_AIDRIVER)
-			end
+			--if modeNum == courseplay.MODE_COMBI then
+			--	vehicle.cp.drivingMode:set(DrivingModeSetting.DRIVING_MODE_NORMAL)
+			--else
+		vehicle.cp.drivingMode:set(DrivingModeSetting.DRIVING_MODE_AIDRIVER)
+			--end
 		--end
 		courseplay:setAIDriver(vehicle, modeNum)
 	end;

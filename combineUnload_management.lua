@@ -41,10 +41,10 @@ function CombineUnloadAIDriver:getChoppersTargetUnloadingCoords()
 		
 	--just Debug
 	local x, y, z = getWorldTranslation( vehicle.cp.DirectionNode);
-	--cpDebug:drawLine(x, y+3 , z, 100, 0, 100, ttX, y+3, ttZ)
+	cpDebug:drawLine(x, y+3 , z, 100, 0, 100, ttX, y+3, ttZ)
 	
 	--print(" -> return ttX, ttZ : "..tostring(ttX)..", "..tostring(ttZ))
-	--return the target coords, the offest DirectionNode->trailer fillNode , and the ZDistance of the pipeRaycatNode -> combines directionNode and whether I have to go bedind the chopper or beside
+	--return the target coords, the offest DirectionNode->trailer fillNode , and the ZDistance of the pipeRaycatNode -> combines directionNode and whether I have to go behind the chopper or beside
 	return ttX, ttZ, trailerOffset, prnToCombineZ, goBehindMe;
 end;
 
@@ -127,7 +127,8 @@ end
 
 
 ------------------------------------------------
-function CombineUnloadAIDriver:calculateCombineOffset(vehicle, combine) --obsolete version to be deleted when all the code is transfered
+function CombineUnloadAIDriver:calculateCombineOffset(combine) --obsolete version to be deleted when all the code is transfered
+	local vehicle = self.vehicle
 	local curFile = "mode2.lua";
 	local offs = vehicle.cp.combineOffset
 	local offsPos = math.abs(vehicle.cp.combineOffset)
