@@ -601,6 +601,17 @@ function courseplay:onLoad(savegame)
 	courseplay:validateCanSwitchMode(self);
 	courseplay.buttons:setActiveEnabled(self, 'all');
 
+	self.cp.autoDriveMode = AutoDriveModeSetting(self)
+	if self.spec_autodrive and self.spec_autodrive.StartDriving then
+		courseplay.debugVehicle(12, self, 'AutoDrive support enabled.')
+		-- disable using AutoDrive by default
+		self.cp.autoDriveMode:set(AutoDriveModeSetting.DONT_USE)
+	else
+		courseplay.debugVehicle(12, self, 'no AutoDrive found, AutoDrive support disabled')
+		self.cp.autoDriveMode:set(AutoDriveModeSetting.NO_AUTODRIVE)
+	end
+
+	-- TODO: remove driving mode when mode 2 is finally converted
 	self.cp.drivingMode = DrivingModeSetting(self)
 	
 	--if CpManager.isDeveloper then
