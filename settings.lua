@@ -602,8 +602,10 @@ function courseplay:toggleDrivingMode(vehicle)
 end
 
 function courseplay:toggleAutoDriveMode(vehicle)
-	vehicle.cp.autoDriveMode:next()
-	courseplay.debugVehicle(12, vehicle, 'AutoDrive mode: %d', vehicle.cp.autoDriveMode:get())
+	if vehicle.cp.driver then
+		vehicle.cp.driver.autoDriveMode:next()
+		courseplay.debugVehicle(12, vehicle, 'AutoDrive mode: %d', vehicle.cp.driver.autoDriveMode:get())
+	end
 end;
 
 
@@ -1989,29 +1991,32 @@ AutoDriveModeSetting.DONT_USE			= 1  -- Don't use AutoDrive
 AutoDriveModeSetting.UNLOAD_OR_REFILL 	= 2  -- Use AutoDrive for unload and refill
 
 function AutoDriveModeSetting:init(vehicle)
-	SettingList.init(self,
-		{
-			AutoDriveModeSetting.NO_AUTODRIVE,
-			AutoDriveModeSetting.DONT_USE,
-			AutoDriveModeSetting.UNLOAD_OR_REFILL,
-		},
-		{
-			'COURSEPLAY_AUTODRIVE_NO_AUTODRIVE',
-			'COURSEPLAY_AUTODRIVE_DONT_USE',
-			'COURSEPLAY_AUTODRIVE_UNLOAD_OR_REFILL',
-		})
 	self.vehicle = vehicle
-end
-
-function AutoDriveModeSetting:checkAndSetValidValue(new)
-	if self:is(AutoDriveModeSetting.NO_AUTODRIVE) then
-		-- can't change mode is no AutoDrive mod found
-		return
+	if self:isAutoDriveAvailable() then
+		SettingList.init(self,
+			{
+				AutoDriveModeSetting.DONT_USE,
+				AutoDriveModeSetting.UNLOAD_OR_REFILL,
+			},
+			{
+				'COURSEPLAY_AUTODRIVE_DONT_USE',
+				'COURSEPLAY_AUTODRIVE_UNLOAD_OR_REFILL',
+			})
 	else
-		return SettingList.checkAndSetValidValue(self, new)
+
+		SettingList.init(self,
+			{
+				AutoDriveModeSetting.NO_AUTODRIVE,
+			},
+			{
+				'COURSEPLAY_AUTODRIVE_NO_AUTODRIVE',
+			})
 	end
 end
 
+function AutoDriveModeSetting:isAutoDriveAvailable()
+	return self.vehicle.spec_autodrive and self.vehicle.spec_autodrive.StartDriving
+end
 
 --- Driving mode setting
 ---@class DrivingModeSetting : SettingList

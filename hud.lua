@@ -1287,9 +1287,9 @@ function courseplay.hud:updatePageContent(vehicle, page)
 						self:disableButtonWithFunction(vehicle,page, 'togglePlowFieldEdge')
 					end
 
-				elseif entry.functionToCall == 'toggleAutoDriveMode' then
+				elseif entry.functionToCall == 'toggleAutoDriveMode' and vehicle.cp.driver then
 					vehicle.cp.hud.content.pages[page][line][1].text = courseplay:loc('COURSEPLAY_AUTODRIVE_MODE');
-					vehicle.cp.hud.content.pages[page][line][2].text = vehicle.cp.autoDriveMode:getText()
+					vehicle.cp.hud.content.pages[page][line][2].text = vehicle.cp.driver.autoDriveMode:getText()
 				end
 			end		
 		end
